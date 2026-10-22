@@ -41,16 +41,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import de.davebook.app.AppState
 import de.davebook.app.BuildConfig
 import de.davebook.app.Person
+import de.davebook.app.R
 import de.davebook.app.Store
 
 private const val PAIR_SHOW = "show"
 private const val PAIR_JOIN = "join"
+
+private const val TAB_HEART = 0
+private const val TAB_CALENDAR = 1
+private const val TAB_REMINDERS = 2
+private const val TAB_SUDOKU = 3
 
 @Composable
 fun DavebookRoot(onRequestNotifications: () -> Unit) {
@@ -70,39 +77,48 @@ fun DavebookRoot(onRequestNotifications: () -> Unit) {
 @Composable
 private fun MainScaffold(state: AppState) {
     val me = state.me ?: return
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    var tab by rememberSaveable { mutableIntStateOf(TAB_HEART) }
     var showSettings by remember { mutableStateOf(false) }
     var pairMode by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Davebook", fontWeight = FontWeight.Bold) },
-                actions = {
-                    IconButton(onClick = { showSettings = true }) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Einstellungen")
-                    }
-                },
-            )
+            // Sudoku hat seine eigene Kopfzeile (wie Pfeilfrei), dort bekommt das Spielfeld den Platz
+            if (tab != TAB_SUDOKU) {
+                CenterAlignedTopAppBar(
+                    title = { Text("Davebook", fontWeight = FontWeight.Bold) },
+                    actions = {
+                        IconButton(onClick = { showSettings = true }) {
+                            Icon(Icons.Filled.Settings, contentDescription = "Einstellungen")
+                        }
+                    },
+                )
+            }
         },
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(
-                    selected = tab == 0,
-                    onClick = { tab = 0 },
+                    selected = tab == TAB_HEART,
+                    onClick = { tab = TAB_HEART },
                     icon = { Icon(Icons.Filled.Favorite, contentDescription = null) },
                     label = { Text("Herz") },
                 )
                 NavigationBarItem(
-                    selected = tab == 1,
-                    onClick = { tab = 1 },
+                    selected = tab == TAB_CALENDAR,
+                    onClick = { tab = TAB_CALENDAR },
                     icon = { Icon(Icons.Filled.DateRange, contentDescription = null) },
                     label = { Text("Kalender") },
                 )
+                NavigationBarItem(
+                    selected = tab == TAB_SUDOKU,
+                    onClick = { tab = TAB_SUDOKU },
+                    icon = { Icon(painterResource(R.drawable.ic_sudoku), contentDescription = null) },
+                    label = { Text("Sudoku") },
+                )
                 if (me == Person.DAVID) {
                     NavigationBarItem(
-                        selected = tab == 2,
-                        onClick = { tab = 2 },
+                        selected = tab == TAB_REMINDERS,
+                        onClick = { tab = TAB_REMINDERS },
                         icon = { Icon(Icons.Filled.Notifications, contentDescription = null) },
                         label = { Text("Erinnerungen") },
                     )
@@ -116,8 +132,9 @@ private fun MainScaffold(state: AppState) {
                 .fillMaxSize(),
         ) {
             when {
-                tab == 1 -> CalendarScreen(state)
-                tab == 2 && me == Person.DAVID -> RemindersScreen(state)
+                tab == TAB_CALENDAR -> CalendarScreen(state)
+                tab == TAB_REMINDERS && me == Person.DAVID -> RemindersScreen(state)
+                tab == TAB_SUDOKU -> SudokuScreen(me, onExit = { tab = TAB_HEART })
                 else -> HomeScreen(state, onOpenPairing = {
                     pairMode = if (me == Person.SOPHIE) PAIR_SHOW else PAIR_JOIN
                 })

@@ -25,6 +25,12 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # Sudoku: Spiel-Datei für die App erzeugen und die Sudoku-Erzeugung prüfen (wie bei Pfeilfrei)
+      - name: Sudoku bauen und prüfen
+        run: |
+          set -o pipefail
+          { python3 tools/build_sudoku.py && node tools/test_sudoku.js; } 2>&1 | tee build.log
+
       - name: APK bauen
         run: |
           set -o pipefail

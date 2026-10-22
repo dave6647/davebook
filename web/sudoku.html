@@ -1,0 +1,1057 @@
+<title>Sudoku</title>
+<style>
+/*@FONTS@*/
+/* Aufbau wie Pfeilfrei: Menü mit Karten, Spiel mit Kopfzeile, Feld und Fußleiste, Blätter (Sheets) von unten. Farben aus Davebook. */
+:root{
+  --paper:#FFF8F8; --surface:#FFFFFF; --ink:#22191B; --muted:#735E65; --rule:#F0DEE1; --grid:#E2CDD3;
+  --thin:#EBDADF; --thick:#6B4652;
+  --accent:#C2185B; --heart:#E8466F; --on-accent:#FFFFFF;
+  --peer:#FCEDF1; --same:#FFD3E0; --sel:#F7B3C8;
+  --user:#6A3FB5; --err:#D32F2F; --err-bg:#FFE0DE;
+  --chip:#FFD9E2; --on-chip:#7A1640;
+  --l1:#F48FB1; --l2:#E8466F; --l3:#8E2A4F;
+  --scrim:rgba(255,248,248,.78);
+  --display:"Overpass","Arial Narrow","Helvetica Neue",Arial,sans-serif;
+  --mono:"Overpass Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#191113; --surface:#261D1F; --ink:#EFDFE1; --muted:#BCA5AC; --rule:#33292C; --grid:#4A3C40;
+    --thin:#3A2E32; --thick:#A88E96;
+    --accent:#FFB1C8; --heart:#FF6F96; --on-accent:#5E1133;
+    --peer:#2D2225; --same:#5A2E40; --sel:#7A3552;
+    --user:#C9B2FF; --err:#FF8A80; --err-bg:#4F2023;
+    --chip:#8E2A4F; --on-chip:#FFD9E2;
+    --l1:#F8A5C2; --l2:#FF6F96; --l3:#D04A7A;
+    --scrim:rgba(25,17,19,.8);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#191113; --surface:#261D1F; --ink:#EFDFE1; --muted:#BCA5AC; --rule:#33292C; --grid:#4A3C40;
+  --thin:#3A2E32; --thick:#A88E96;
+  --accent:#FFB1C8; --heart:#FF6F96; --on-accent:#5E1133;
+  --peer:#2D2225; --same:#5A2E40; --sel:#7A3552;
+  --user:#C9B2FF; --err:#FF8A80; --err-bg:#4F2023;
+  --chip:#8E2A4F; --on-chip:#FFD9E2;
+  --l1:#F8A5C2; --l2:#FF6F96; --l3:#D04A7A;
+  --scrim:rgba(25,17,19,.8);
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html{height:100%;box-sizing:border-box}
+*,*::before,*::after{box-sizing:inherit}
+body{height:100%;margin:0;background:var(--paper);color:var(--ink);font-family:var(--display);font-size:16px;
+  overflow:hidden;overscroll-behavior:none;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------- Spiel ---------- */
+#app{display:flex;flex-direction:column;align-items:center;height:100%;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.top{width:100%;display:flex;align-items:center;gap:10px;padding-block:8px 6px}
+.icon-btn{width:44px;height:44px;flex:none;border:0;border-radius:12px;background:transparent;display:grid;place-items:center;margin-left:-8px}
+.icon-btn svg{width:24px;height:24px;stroke:var(--ink);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.badge{display:flex;align-items:center;gap:8px;min-width:0}
+.badge-label{font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.badge-num{font-family:var(--mono);font-weight:700;font-size:18px;min-width:40px;height:32px;padding:2px 11px 0;border-radius:16px;
+  background:var(--ink);color:var(--paper);display:inline-flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+#app.d-easy .badge-num{background:var(--l1);color:#3E0021}
+#app.d-medium .badge-num{background:var(--l2);color:#fff}
+#app.d-hard .badge-num{background:var(--l3);color:#fff}
+.spacer{flex:1}
+.hearts{display:flex;gap:2px}
+.hearts svg{width:20px;height:20px}
+.hearts .full path{fill:var(--heart)}
+.hearts .lost path{fill:none;stroke:var(--grid);stroke-width:2}
+.hearts.shake{animation:shake .42s}
+.timer{display:flex;align-items:center;gap:4px;height:32px;padding-top:2px;font-family:var(--mono);font-weight:700;font-size:17px;color:var(--muted);font-variant-numeric:tabular-nums}
+.timer svg{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;margin-top:-2px}
+@keyframes shake{20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(2px)}}
+
+#boardWrap{flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center}
+/* Feld: 3×3 Blöcke mit dicker Linie dazwischen, darin je 3×3 Felder mit dünner Linie */
+#board{--bs:300px;--cs:calc((var(--bs) - 10px) / 9);width:var(--bs);height:var(--bs);flex:none;display:grid;grid-template:repeat(3,1fr)/repeat(3,1fr);gap:2px;
+  padding:2px;border-radius:10px;background:var(--thick);overflow:hidden}
+.box{display:grid;grid-template:repeat(3,1fr)/repeat(3,1fr);gap:1px;background:var(--thin)}
+.cell{position:relative;display:grid;place-items:center;background:var(--surface);font-weight:800;font-size:calc(var(--cs) * .6);line-height:1;
+  padding-top:calc(var(--cs) * .07);color:var(--ink);font-variant-numeric:tabular-nums;cursor:pointer}
+.cell.user{color:var(--user);font-weight:700}
+.cell.peer{background:var(--peer)}
+.cell.same{background:var(--same)}
+.cell.sel{background:var(--sel)}
+.cell.err{color:var(--err);background:var(--err-bg)}
+.cell.err.sel{box-shadow:inset 0 0 0 2px var(--err)}
+.notes{position:absolute;inset:1px;display:grid;grid-template:repeat(3,1fr)/repeat(3,1fr);padding-top:calc(var(--cs) * .03)}
+.notes i{font-style:normal;font-weight:700;font-size:calc(var(--cs) * .27);line-height:1;display:grid;place-items:center;color:var(--muted)}
+.notes i.hl{color:var(--accent);font-weight:900}
+
+/* Werkzeuge (Zurück, Löschen, Notizen, Tipp, Neu) und Zahlenfeld: so breit wie das Spielfeld */
+.tools,.pad{width:var(--bs,100%);max-width:100%}
+.tools{display:flex;gap:4px;padding-top:10px}
+.tool{position:relative;flex:1 1 0;min-width:0;height:54px;border:0;border-radius:12px;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  font-size:12px;font-weight:700;color:var(--muted);padding:2px 0 0;transition:transform .08s}
+.tool:active{transform:translateY(1px)}
+.tool svg{width:24px;height:24px;stroke:var(--ink);fill:none;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round}
+.tool[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.tool[aria-pressed="true"] svg{stroke:var(--paper)}
+.tool:disabled{opacity:.4;cursor:default}
+.tool .chip{position:absolute;top:4px;left:calc(50% + 7px);font-family:var(--mono);font-size:11px;line-height:1;background:var(--chip);color:var(--on-chip);border-radius:6px;padding:3px 4px 1px}
+.tool .chip.shake{animation:shake .42s}
+.pad{display:grid;grid-template-columns:repeat(9,1fr);gap:5px;padding-block:8px 14px}
+.key{height:58px;min-width:0;border-radius:10px;border:1.5px solid var(--grid);background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  font-weight:800;font-size:26px;line-height:1;color:var(--ink);padding:4px 0 0;transition:transform .08s}
+.key:active{transform:translateY(1px)}
+.key small{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--muted)}
+.key.done{visibility:hidden}
+#app.notes-on .key{color:var(--user);border-style:dashed}
+
+/* ---------- Menü ---------- */
+.screen{position:fixed;inset:0;background:var(--paper);z-index:5;overflow-y:auto;overscroll-behavior:contain;
+  padding-top:calc(env(safe-area-inset-top,0px) + 18px);padding-bottom:calc(env(safe-area-inset-bottom,0px) + 18px);
+  padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px))}
+.home-in{max-width:460px;min-height:100%;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.eyebrow{font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:0}
+.wordmark{font-weight:900;font-size:clamp(56px,17vw,88px);line-height:.86;letter-spacing:-.035em;margin:4px 0 0}
+.wordmark span{color:var(--heart)}
+.preview-wrap{flex:1;min-height:110px;position:relative;display:flex;align-items:center;justify-content:center}
+#preview{display:grid;grid-template:repeat(9,1fr)/repeat(9,1fr);gap:1px;padding:2px;border-radius:8px;background:var(--thin);opacity:.9}
+#preview i{font-style:normal;display:grid;place-items:center;background:var(--surface);font-weight:800;line-height:1;padding-top:8%;color:var(--muted)}
+#preview i.u{color:var(--user)}
+#preview i:nth-child(9n+3),#preview i:nth-child(9n+6){box-shadow:1px 0 0 var(--thick)}
+#preview i:nth-child(n+19):nth-child(-n+27),#preview i:nth-child(n+46):nth-child(-n+54){box-shadow:0 1px 0 var(--thick)}
+#preview i:nth-child(21),#preview i:nth-child(24),#preview i:nth-child(48),#preview i:nth-child(51){box-shadow:1px 0 0 var(--thick),0 1px 0 var(--thick),1px 1px 0 var(--thick)}
+
+.modes{display:flex;flex-direction:column;gap:10px}
+.mode{--line:var(--l1);position:relative;overflow:hidden;width:100%;border-radius:14px;border:1.5px solid var(--rule);background:var(--surface);
+  padding:12px 12px 11px 24px;display:flex;flex-direction:column;gap:3px;text-align:left;transition:transform .08s}
+.mode::before{content:"";position:absolute;left:0;top:0;bottom:0;width:7px;background:var(--line)}
+.mode:active{transform:translateY(1px)}
+.mode.medium{--line:var(--l2)}
+.mode.hard{--line:var(--l3)}
+.mode-head{display:flex;align-items:center;gap:10px}
+.mode-name{flex:1;min-width:0;font-weight:900;font-size:22px;letter-spacing:-.015em;line-height:1.05;padding-top:3px}
+.mode-tag{font-family:var(--mono);font-weight:700;font-size:12px;line-height:1;border-radius:6px;padding:4px 6px 2px;background:var(--chip);color:var(--on-chip);white-space:nowrap}
+.chev{width:18px;height:18px;flex:none;stroke:var(--muted);fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.mode-pitch{font-size:15px;line-height:1.3;color:var(--muted)}
+.mode-stats{display:flex;flex-wrap:wrap;gap:2px 14px;margin-top:3px;font-family:var(--mono);font-weight:700;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.mode-stats b{color:var(--ink);font-weight:700}
+
+.toggle{flex:none;width:100%;height:50px;border-radius:12px;border:1.5px solid var(--grid);background:transparent;display:flex;align-items:center;justify-content:space-between;
+  padding:2px 12px 0 14px;font-weight:700;font-size:16px;text-align:left}
+.toggle .sw{width:36px;height:22px;flex:none;border-radius:11px;background:var(--grid);position:relative;transition:background .15s}
+.toggle .sw::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--surface);transition:transform .15s}
+.toggle[aria-checked="true"] .sw{background:var(--accent)}
+.toggle[aria-checked="true"] .sw::after{transform:translateX(14px)}
+.set-label{display:flex;align-items:center;gap:10px}
+.set-ico{width:20px;height:20px;flex:none;stroke:currentColor;fill:none;stroke-width:2.1;stroke-linecap:round}
+.tg-text{display:flex;flex-direction:column;gap:1px}
+.tg-text small{font-size:13px;font-weight:400;color:var(--muted)}
+.set-list{display:flex;flex-direction:column;gap:10px}
+.set-list .toggle{height:auto;min-height:52px;padding-block:8px 6px}
+
+/* ---------- Blätter von unten (Ergebnis, Nachfrage, Einstellungen) ---------- */
+.dlg{position:fixed;inset:0;z-index:10;background:var(--scrim);display:flex;align-items:flex-end;justify-content:center;
+  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+.sheet{width:100%;max-width:480px;max-height:calc(100% - 24px);overflow-y:auto;background:var(--surface);border-radius:22px 22px 0 0;border-top:1.5px solid var(--rule);
+  padding:26px max(24px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 22px) max(24px,env(safe-area-inset-left,0px));
+  display:flex;flex-direction:column;gap:12px;animation:rise .28s cubic-bezier(.2,.8,.2,1)}
+@keyframes rise{from{transform:translateY(40px);opacity:0}}
+.sheet h2{font-size:38px;font-weight:900;letter-spacing:-.02em;line-height:.95;margin:0;text-wrap:balance}
+.sheet p{margin:0;font-size:17px;line-height:1.4;color:var(--muted)}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sheet-head h2{font-size:28px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips span{font-family:var(--mono);font-weight:700;font-size:13px;background:var(--chip);color:var(--on-chip);border-radius:7px;padding:5px 8px 3px;font-variant-numeric:tabular-nums}
+.chips span.best{background:var(--ink);color:var(--paper)}
+.row{display:flex;gap:10px;margin-top:8px}
+.btn{font-weight:700;font-size:15px;height:46px;padding:2px 16px 0;border-radius:12px;border:1.5px solid var(--grid);background:var(--surface);color:var(--ink);
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:transform .08s;white-space:nowrap}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--ink);border-color:var(--ink);color:var(--paper);height:56px;font-size:18px;font-weight:800;padding:3px 20px 0}
+.row .btn{flex:1;height:56px}
+.row .btn.primary{flex:1.6}
+.sheet.party h2{transform-origin:left 70%;animation:pop .55s .08s cubic-bezier(.2,1.5,.35,1) both}
+@keyframes pop{from{transform:scale(.55);opacity:0}}
+
+#fx{position:fixed;inset:0;width:100%;height:100%;z-index:11;pointer-events:none}
+
+@media (max-height: 760px){
+  .home-in{gap:11px}
+  .wordmark{font-size:clamp(48px,14vw,70px)}
+  .preview-wrap{min-height:64px}
+  .modes{gap:8px}
+  .mode{padding-block:10px 9px}
+  .key{height:52px}
+  .tool{height:50px}
+}
+@media (max-height: 640px){ .preview-wrap{min-height:0} }
+@media (prefers-reduced-motion: reduce){
+  .sheet,.sheet.party h2,.hearts.shake,.tool .chip.shake{animation:none}
+}
+</style>
+
+<div id="app">
+  <header class="top">
+    <button id="btnHome" class="icon-btn" aria-label="Menü">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+    </button>
+    <div class="badge"><span id="lvlLabel" class="badge-label">Leicht</span><span id="lvlNum" class="badge-num">1</span></div>
+    <span class="spacer"></span>
+    <div id="hearts" class="hearts" role="img" aria-label="3 Herzen"></div>
+    <div class="timer" role="timer" aria-label="Zeit">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 13.5V10M10 3.5h4M12 3.5V6"/></svg><span id="timerTxt">0:00</span>
+    </div>
+  </header>
+  <main id="boardWrap">
+    <div id="board" role="grid" aria-label="Sudoku"></div>
+  </main>
+  <div class="tools">
+    <button id="btnUndo" class="tool" aria-label="Rückgängig">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4.5 9.5 9 5"/><path d="M4.5 9.5H14a5.5 5.5 0 0 1 0 11h-3"/></svg><span>Zurück</span>
+    </button>
+    <button id="btnErase" class="tool" aria-label="Löschen">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6H9.2L3.5 12l5.7 6H20a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1z"/><path d="m11.5 9.5 5 5M16.5 9.5l-5 5"/></svg><span>Löschen</span>
+    </button>
+    <button id="btnNotes" class="tool" aria-pressed="false" aria-label="Notizen">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4.5l5 5L9 20H4v-5z"/><path d="M12.5 6.5l5 5"/></svg><span>Notizen</span>
+    </button>
+    <button id="btnHint" class="tool" aria-label="Tipp">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 17.5h5M10.3 20.6h3.4M12 3.2a6.1 6.1 0 0 0-3.7 11c.7.6 1.2 1.4 1.2 2.3h5c0-.9.5-1.7 1.2-2.3A6.1 6.1 0 0 0 12 3.2z"/></svg><span>Tipp</span><span id="hintCount" class="chip">3</span>
+    </button>
+    <button id="btnRestart" class="tool" aria-label="Von vorn">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.6 3.8v4.6H15"/></svg><span>Neu</span>
+    </button>
+  </div>
+  <div id="pad" class="pad" role="group" aria-label="Zahlen"></div>
+</div>
+
+<section id="home" class="screen">
+  <div class="home-in">
+    <p id="hello" class="eyebrow">Davebook</p>
+    <h1 class="wordmark">Sudoku<span>.</span></h1>
+    <div id="previewWrap" class="preview-wrap"><div id="preview" aria-hidden="true"></div></div>
+    <nav id="modes" class="modes"></nav>
+    <button id="btnSettings" class="toggle" aria-haspopup="dialog">
+      <span class="set-label"><svg class="set-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg><span>Einstellungen</span></span>
+      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+  </div>
+</section>
+
+<div id="dlg" class="dlg" hidden>
+  <div id="dlgSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+    <p id="dlgEyebrow" class="eyebrow"></p>
+    <h2 id="dlgTitle"></h2>
+    <p id="dlgText"></p>
+    <div id="dlgChips" class="chips" hidden></div>
+    <div class="row">
+      <button id="dlgSecondary" class="btn"></button>
+      <button id="dlgPrimary" class="btn primary"></button>
+    </div>
+  </div>
+</div>
+
+<div id="setDlg" class="dlg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+    <div class="sheet-head">
+      <h2 id="setTitle">Einstellungen</h2>
+      <button id="setClose" class="btn">Fertig</button>
+    </div>
+    <div class="set-list">
+      <button id="tglHearts" class="toggle" role="switch" aria-checked="true"><span class="tg-text"><span>Fehler kosten Herzen</span><small>Nach 3 Fehlern geht es von vorn los</small></span><span class="sw"></span></button>
+      <button id="tglSound" class="toggle" role="switch" aria-checked="true"><span>Ton</span><span class="sw"></span></button>
+      <button id="tglVib" class="toggle" role="switch" aria-checked="true"><span>Vibration</span><span class="sw"></span></button>
+    </div>
+  </div>
+</div>
+
+<canvas id="fx" aria-hidden="true" hidden></canvas>
+
+<script>
+(() => {
+'use strict';
+
+// ENGINE START
+// Version der Sudoku-Erzeugung (fließt in den Zufall ein). Ein angefangenes Sudoku speichert sein Feld selbst
+// und läuft deshalb auch nach einer Änderung weiter. tools/test_sudoku.js prüft, dass Nr. 1–20 je GEN gleich bleiben.
+const GEN = 1;
+
+// Schwierigkeiten: Zielzahl der vorgegebenen Ziffern und welche Lösungswege nötig sind.
+//   logic 1 = nur „einzige Möglichkeit“ (naked/hidden single), immer ohne Raten lösbar
+//   logic 2 = braucht mindestens einen weiteren Schritt (Paare, Zeiger), aber ebenfalls ohne Raten lösbar
+const DIFFS = {
+  easy:   { givens: 38, logic: 1 },
+  medium: { givens: 30, logic: 1 },
+  hard:   { givens: 24, logic: 2 },
+};
+
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function seedFor(diff, n, salt){
+  let h = 2166136261 ^ GEN;
+  for (const ch of diff + ':' + n + ':' + (salt || 0)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function shuffle(a, rnd){
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+
+// Zeilen, Spalten, Blöcke (je 9 Felder) und die 20 „Nachbarn“ jedes Feldes
+const rowOf = i => (i / 9) | 0, colOf = i => i % 9, boxOf = i => ((i / 27) | 0) * 3 + (((i % 9) / 3) | 0);
+const UNITS = [];
+for (let r = 0; r < 9; r++) UNITS.push([0,1,2,3,4,5,6,7,8].map(c => r * 9 + c));
+for (let c = 0; c < 9; c++) UNITS.push([0,1,2,3,4,5,6,7,8].map(r => r * 9 + c));
+for (let b = 0; b < 9; b++) UNITS.push([0,1,2,3,4,5,6,7,8].map(k => (((b / 3) | 0) * 3 + ((k / 3) | 0)) * 9 + (b % 3) * 3 + k % 3));
+const PEERS = [];
+for (let i = 0; i < 81; i++) {
+  const s = new Set();
+  for (let j = 0; j < 81; j++) if (j !== i && (rowOf(j) === rowOf(i) || colOf(j) === colOf(i) || boxOf(j) === boxOf(i))) s.add(j);
+  PEERS.push([...s]);
+}
+// Überschneidungen Block/Zeile bzw. Block/Spalte (je 3 Felder) für die Zeiger-Regel, in beide Richtungen
+const LINKS = [];
+for (let a = 0; a < 27; a++) for (let b = 0; b < 27; b++) {
+  if (a === b) continue;
+  const inter = UNITS[a].filter(i => UNITS[b].includes(i));
+  if (inter.length === 3) LINKS.push([UNITS[a].filter(i => !inter.includes(i)), UNITS[b].filter(i => !inter.includes(i)), inter]);
+}
+const BITS = n => { let c = 0; while (n) { n &= n - 1; c++; } return c; };
+const POP = new Uint8Array(512).map((_, m) => BITS(m));
+const ALL = 511;
+
+/** Zählt Lösungen (bricht bei `limit` ab). Mit `rnd` wird in zufälliger Ziffernfolge gesucht und die erste Lösung zurückgegeben. */
+function solve(grid, limit, rnd){
+  const g = grid.slice();
+  const rows = new Int32Array(9), cols = new Int32Array(9), boxes = new Int32Array(9);
+  for (let i = 0; i < 81; i++) if (g[i]) {
+    const b = 1 << (g[i] - 1), r = rowOf(i), c = colOf(i), x = boxOf(i);
+    if ((rows[r] | cols[c] | boxes[x]) & b) return { count: 0, first: null };
+    rows[r] |= b; cols[c] |= b; boxes[x] |= b;
+  }
+  let count = 0, first = null;
+  (function rec(){
+    let best = -1, bestMask = 0, bestN = 10;
+    for (let i = 0; i < 81; i++) if (!g[i]) {
+      const m = ~(rows[rowOf(i)] | cols[colOf(i)] | boxes[boxOf(i)]) & ALL, n = POP[m];
+      if (n === 0) return;
+      if (n < bestN) { best = i; bestMask = m; bestN = n; if (n === 1) break; }
+    }
+    if (best < 0) { count++; if (!first) first = g.slice(); return; }
+    const digits = [];
+    for (let d = 1; d <= 9; d++) if (bestMask & (1 << (d - 1))) digits.push(d);
+    if (rnd) shuffle(digits, rnd);
+    const r = rowOf(best), c = colOf(best), x = boxOf(best);
+    for (const d of digits) {
+      const b = 1 << (d - 1);
+      g[best] = d; rows[r] |= b; cols[c] |= b; boxes[x] |= b;
+      rec();
+      g[best] = 0; rows[r] &= ~b; cols[c] &= ~b; boxes[x] &= ~b;
+      if (count >= limit) return;
+    }
+  })();
+  return { count, first };
+}
+
+/** Löst wie ein Mensch, ohne zu raten. level 1 = nur Singles nötig, 2 = auch Paare/Zeiger nötig. */
+function logicSolve(grid, maxLevel){
+  const v = grid.slice(), cand = new Int32Array(81);
+  for (let i = 0; i < 81; i++) if (!v[i]) {
+    let m = ALL;
+    for (const p of PEERS[i]) if (v[p]) m &= ~(1 << (v[p] - 1));
+    cand[i] = m;
+  }
+  const place = (i, d) => { v[i] = d; cand[i] = 0; const b = ~(1 << (d - 1)); for (const p of PEERS[i]) cand[p] &= b; };
+  let level = v.some(x => !x) ? 1 : 0;
+  for (;;) {
+    let moved = false;
+    // einzige Möglichkeit im Feld
+    for (let i = 0; i < 81; i++) if (!v[i]) {
+      if (!cand[i]) return { solved: false, level, values: v };
+      if (POP[cand[i]] === 1) { place(i, 31 - Math.clz32(cand[i]) + 1); moved = true; }
+    }
+    // einzige Stelle in Zeile/Spalte/Block
+    for (const u of UNITS) for (let d = 1; d <= 9; d++) {
+      const b = 1 << (d - 1);
+      let at = -1, n = 0;
+      for (const i of u) { if (v[i] === d) { n = -1; break; } if (cand[i] & b) { at = i; n++; } }
+      if (n === 1) { place(at, d); moved = true; }
+    }
+    if (moved) continue;
+    if (v.every(x => x)) return { solved: true, level, values: v };
+    if (maxLevel < 2 || !advancedStep(v, cand)) return { solved: false, level, values: v };
+    level = 2;
+  }
+}
+
+/** Ein Schritt mit Zeigern, nackten Paaren/Dreiern und versteckten Paaren. true, wenn etwas gestrichen wurde. */
+function advancedStep(v, cand){
+  let changed = false;
+  const strike = (i, mask) => { if (!v[i] && (cand[i] & mask)) { cand[i] &= ~mask; changed = true; } };
+  // Zeiger: Kommt eine Ziffer in einem Block nur in einer Zeile/Spalte vor, fällt sie im Rest dieser Zeile/Spalte weg (und umgekehrt)
+  for (const [restA, restB, inter] of LINKS) {
+    let inA = 0, outA = 0;
+    for (const i of inter) if (!v[i]) inA |= cand[i];
+    for (const i of restA) if (!v[i]) outA |= cand[i];
+    const only = inA & ~outA;
+    if (only) for (const i of restB) strike(i, only);
+  }
+  if (changed) return true;
+  // Nackte Paare und Dreier: n Felder mit zusammen nur n Ziffern
+  for (const u of UNITS) {
+    const open = u.filter(i => !v[i]);
+    for (let x = 0; x < open.length; x++) for (let y = x + 1; y < open.length; y++) {
+      const m2 = cand[open[x]] | cand[open[y]];
+      if (POP[m2] === 2) for (const i of open) if (i !== open[x] && i !== open[y]) strike(i, m2);
+      for (let z = y + 1; z < open.length; z++) {
+        const m3 = m2 | cand[open[z]];
+        if (POP[m3] === 3) for (const i of open) if (i !== open[x] && i !== open[y] && i !== open[z]) strike(i, m3);
+      }
+    }
+  }
+  if (changed) return true;
+  // Versteckte Paare: zwei Ziffern, die in einer Einheit nur in denselben zwei Feldern gehen
+  for (const u of UNITS) {
+    const where = [];
+    for (let d = 1; d <= 9; d++) where.push(u.filter(i => !v[i] && (cand[i] & (1 << (d - 1)))));
+    for (let d = 0; d < 9; d++) for (let e = d + 1; e < 9; e++) {
+      if (where[d].length !== 2 || where[e].length !== 2) continue;
+      if (where[d][0] !== where[e][0] || where[d][1] !== where[e][1]) continue;
+      const keep = (1 << d) | (1 << e);
+      for (const i of where[d]) strike(i, ALL & ~keep);
+    }
+  }
+  return changed;
+}
+
+/** Sudoku Nummer n der Schwierigkeit diff. Immer gleich (auf jedem Handy), genau eine Lösung, ohne Raten lösbar. */
+function generatePuzzle(diff, n){
+  const spec = DIFFS[diff] || DIFFS.easy;
+  let fallback = null;
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const rnd = mulberry32(seedFor(diff, n, attempt));
+    const solution = solve(new Array(81).fill(0), 1, rnd).first;
+    const puzzle = solution.slice();
+    let givens = 81;
+    // Paarweise punktsymmetrisch entfernen (sieht aufgeräumter aus), solange die Lösung eindeutig und logisch erreichbar bleibt
+    for (const i of shuffle([...Array(41).keys()], rnd)) {
+      if (givens <= spec.givens) break;
+      const j = 80 - i, pi = puzzle[i], pj = puzzle[j];
+      puzzle[i] = 0; puzzle[j] = 0;
+      if (solve(puzzle, 2).count === 1 && logicSolve(puzzle, spec.logic).solved) givens -= i === j ? 1 : 2;
+      else { puzzle[i] = pi; puzzle[j] = pj; }
+    }
+    // Schwer: danach noch einzelne Ziffern wegnehmen, bis das Sudoku mehr als Singles braucht
+    if (spec.logic > 1) for (const i of shuffle([...Array(81).keys()], rnd)) {
+      if (givens <= spec.givens - 2 || !puzzle[i]) continue;
+      if (logicSolve(puzzle, 1).solved === false) break;
+      const pi = puzzle[i];
+      puzzle[i] = 0;
+      if (solve(puzzle, 2).count === 1 && logicSolve(puzzle, spec.logic).solved) givens--;
+      else puzzle[i] = pi;
+    }
+    const r = logicSolve(puzzle, spec.logic);
+    const ok = r.solved && r.level === spec.logic;
+    const res = { diff, n, puzzle, solution, givens, level: r.level };
+    if (ok && givens <= spec.givens + 4) return res;
+    if (ok && (!fallback || givens < fallback.givens)) fallback = res;
+  }
+  return fallback || generatePuzzle('medium', n);
+}
+// ENGINE END
+
+/* ---------- Speicher (Android-Brücke oder Browser) ---------- */
+const bridge = window.AndroidBridge;
+const Store = {
+  get(k, def){
+    try {
+      const raw = bridge ? bridge.load(k) : localStorage.getItem('sudoku_' + k);
+      return raw ? JSON.parse(raw) : def;
+    } catch (e) { return def; }
+  },
+  set(k, v){
+    try {
+      const s = JSON.stringify(v);
+      if (bridge) bridge.save(k, s); else localStorage.setItem('sudoku_' + k, s);
+    } catch (e) {}
+  }
+};
+// Wer spielt (David oder Sophie): nur für den Glückwunsch
+const PLAYER = (() => { try { return bridge && bridge.name ? String(bridge.name() || '') : ''; } catch (e) { return ''; } })();
+// Dunkles Design wie die App (zusätzlich zu prefers-color-scheme)
+try { if (bridge && bridge.theme) document.documentElement.dataset.theme = bridge.theme() === 'dark' ? 'dark' : 'light'; } catch (e) {}
+
+const DIFF_KEYS = ['easy', 'medium', 'hard'];
+const DIFF_NAME = { easy: 'Leicht', medium: 'Mittel', hard: 'Schwer' };
+const DIFF_PITCH = { easy: 'Zum Warmwerden', medium: 'Ein bisschen knobeln', hard: 'Für echte Profis' };
+const HEARTS = 3, HINTS = 3;
+
+// Spielstand: Einstellungen, je Schwierigkeit die nächste Nummer, Anzahl gelöst, Bestzeit,
+// und das laufende Sudoku je Schwierigkeit (wird bei jedem Zug gespeichert).
+const progress = Object.assign({ sound: true, vib: true, hearts: true, last: 'easy' }, Store.get('progress', {}));
+progress.stats = progress.stats || {};
+for (const d of DIFF_KEYS) {
+  const s = progress.stats[d] = Object.assign({ n: 1, solved: 0, best: 0 }, progress.stats[d]);
+  if (!(Number.isInteger(s.n) && s.n >= 1)) s.n = 1;
+}
+progress.run = Object.assign({ easy: null, medium: null, hard: null }, progress.run);
+if (!DIFF_KEYS.includes(progress.last)) progress.last = 'easy';
+const saveProgress = () => Store.set('progress', progress);
+
+const validRun = r => !!r && DIFF_KEYS.includes(r.d) && typeof r.p === 'string' && r.p.length === 81 &&
+  typeof r.s === 'string' && r.s.length === 81 && typeof r.c === 'string' && r.c.length === 81 && Array.isArray(r.m) && r.m.length === 81;
+for (const d of DIFF_KEYS) if (!validRun(progress.run[d])) progress.run[d] = null;
+
+/* ---------- Ton & Vibration ---------- */
+let ac = null;
+function audio(){
+  if (!progress.sound) return null;
+  if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+  if (ac.state === 'suspended') ac.resume();
+  return ac;
+}
+function tone(freq, dur, type, vol, when, slideTo){
+  const a = audio(); if (!a) return;
+  const t = a.currentTime + (when || 0);
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = type || 'triangle';
+  o.frequency.setValueAtTime(freq, t);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol || 0.1, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(a.destination);
+  o.start(t); o.stop(t + dur + 0.03);
+}
+const SCALE = [0, 2, 4, 7, 9, 12, 14, 16, 19];
+const sndTap = () => tone(880, 0.05, 'sine', 0.035);
+const sndPlace = d => { const f = 392 * Math.pow(2, SCALE[d - 1] / 12); tone(f, 0.16, 'triangle', 0.09); tone(f * 2, 0.08, 'sine', 0.03); };
+const sndErr = () => { tone(170, 0.22, 'sine', 0.25, 0, 70); tone(90, 0.1, 'square', 0.035); };
+const sndUnit = () => [0, 4, 7, 12].forEach((s, i) => tone(659 * Math.pow(2, s / 12), 0.2, 'triangle', 0.06, 0.05 + i * 0.06));
+const sndWin = () => [0, 4, 7, 12, 16, 19].forEach((s, i) => tone(523 * Math.pow(2, s / 12), 0.36, 'triangle', 0.085, i * 0.08));
+const sndOver = () => [7, 4, 0, -5].forEach((s, i) => tone(392 * Math.pow(2, s / 12), i === 3 ? 0.6 : 0.24, 'triangle', 0.09, i * 0.16));
+function buzz(kind){
+  if (!progress.vib) return;
+  try {
+    if (bridge && bridge.haptic) bridge.haptic(kind);
+    else if (navigator.vibrate) navigator.vibrate(kind === 'error' ? 60 : kind === 'win' ? [30, 60, 30] : 10);
+  } catch (e) {}
+}
+
+/* ---------- Hilfen ---------- */
+const $ = id => document.getElementById(id);
+const fmt = ms => {
+  const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, ss = String(s % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+};
+const HEART_SVG = cls => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.3s-7.6-4.6-7.6-10.1A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.6 2.6c0 5.5-7.6 10.1-7.6 10.1z"/></svg>`;
+const digitsOf = s => Int8Array.from(s, ch => +ch);
+const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- Spielzustand ---------- */
+const G = {
+  screen: 'home', d: 'easy', run: null,
+  given: null, sol: null, val: null, notes: null, fixed: new Set(), // fixed = per Tipp gesetzt (bleibt beim Rückgängig)
+  sel: -1, hl: 0, notesMode: false, undo: [], done: false, last: 0, lastSave: 0,
+};
+const els = { app: $('app'), home: $('home'), board: $('board'), pad: $('pad'), hearts: $('hearts'), timer: $('timerTxt'),
+  dlg: $('dlg'), setDlg: $('setDlg'), modes: $('modes'), preview: $('preview'), fx: $('fx') };
+
+const value = i => G.given[i] || G.val[i];
+const isWrong = i => !!G.val[i] && G.val[i] !== G.sol[i];
+const isLocked = i => !!G.given[i] || G.fixed.has(i) || (!!G.val[i] && !isWrong(i)); // richtige Zahlen bleiben stehen
+const heartsOn = () => progress.hearts && G.run && !G.run.noRecord;
+
+function syncRun(){
+  const r = G.run; if (!r) return;
+  r.c = Array.from(G.val).join('');
+  r.m = Array.from(G.notes);
+  r.f = [...G.fixed];
+  r.sel = G.sel;
+  r.ms = Math.round(r.ms);
+  saveProgress();
+  G.lastSave = performance.now();
+}
+
+function newRun(d, n){
+  const p = generatePuzzle(d, n);
+  progress.run[d] = { v: GEN, d, n, p: p.puzzle.join(''), s: p.solution.join(''), c: '0'.repeat(81), m: new Array(81).fill(0), f: [],
+    hearts: HEARTS, hints: HINTS, ms: 0, errors: 0, noRecord: false, sel: -1 };
+  saveProgress();
+}
+function loadRun(d){
+  const r = progress.run[d];
+  G.d = d; G.run = r;
+  G.given = digitsOf(r.p); G.sol = digitsOf(r.s); G.val = digitsOf(r.c);
+  G.notes = Int16Array.from(r.m, x => x & 511);
+  G.fixed = new Set((r.f || []).filter(i => i >= 0 && i < 81));
+  for (const i of G.fixed) G.val[i] = G.sol[i];
+  for (let i = 0; i < 81; i++) if (G.given[i]) { G.val[i] = 0; G.notes[i] = 0; }
+  G.sel = Number.isInteger(r.sel) && r.sel >= 0 && r.sel < 81 ? r.sel : -1;
+  G.hl = G.sel >= 0 ? value(G.sel) : 0;
+  G.undo = []; G.done = false; G.notesMode = false;
+}
+
+/* ---------- Bildschirme ---------- */
+function goGame(d){
+  audio();
+  if (!progress.run[d]) newRun(d, progress.stats[d].n);
+  progress.last = d; saveProgress();
+  loadRun(d);
+  G.screen = 'game'; els.home.hidden = true;
+  G.last = performance.now();
+  layout(); render();
+  if (heartsOn() && G.run.hearts <= 0) gameOver(true);
+}
+function goHome(){
+  if (G.screen === 'game' && G.run && !G.done) syncRun();
+  els.dlg.hidden = true;
+  G.screen = 'home'; els.home.hidden = false;
+  renderHome();
+}
+
+/* ---------- Spielfeld aufbauen ---------- */
+const cellEls = [];
+(function buildBoard(){
+  for (let b = 0; b < 9; b++) {
+    const box = document.createElement('div'); box.className = 'box'; box.setAttribute('role', 'presentation');
+    for (let k = 0; k < 9; k++) {
+      const i = (((b / 3) | 0) * 3 + ((k / 3) | 0)) * 9 + (b % 3) * 3 + k % 3;
+      const c = document.createElement('div'); c.className = 'cell'; c.dataset.i = i; c.setAttribute('role', 'gridcell');
+      cellEls[i] = c; box.appendChild(c);
+    }
+    els.board.appendChild(box);
+  }
+  let html = '';
+  for (let d = 1; d <= 9; d++) html += `<button class="key" data-d="${d}" aria-label="${d}"><span>${d}</span><small>9</small></button>`;
+  els.pad.innerHTML = html;
+})();
+
+function layout(){
+  const wrap = $('boardWrap').getBoundingClientRect();
+  const bs = Math.max(180, Math.floor(Math.min(wrap.width, wrap.height - 4, 560)));
+  els.board.style.setProperty('--bs', bs + 'px');
+  els.app.style.setProperty('--bs', bs + 'px');
+}
+window.addEventListener('resize', () => { if (G.screen === 'game') layout(); else renderPreview(); });
+
+/* ---------- Zeichnen ---------- */
+function render(){
+  if (!G.run) return;
+  const r = G.run, sel = G.sel;
+  const hl = sel >= 0 && value(sel) ? value(sel) : G.hl;
+  els.app.className = 'd-' + G.d + (G.notesMode ? ' notes-on' : '');
+  $('lvlLabel').textContent = DIFF_NAME[G.d];
+  $('lvlNum').textContent = r.n;
+  for (let i = 0; i < 81; i++) {
+    const c = cellEls[i], v = value(i);
+    let cls = 'cell';
+    if (G.given[i]) cls += ' given'; else if (v) cls += isWrong(i) ? ' err' : ' user';
+    if (sel >= 0 && i !== sel && PEERS[sel].includes(i)) cls += ' peer';
+    if (hl && v === hl) cls += ' same';
+    if (i === sel) cls += ' sel';
+    c.className = cls;
+    const key = v ? 'v' + v : G.notes[i] ? 'n' + G.notes[i] + ':' + hl : '';
+    if (c._key !== key) {
+      c._key = key;
+      if (v) c.textContent = v;
+      else if (G.notes[i]) {
+        let h = '<span class="notes">';
+        for (let d = 1; d <= 9; d++) h += (G.notes[i] & (1 << (d - 1))) ? `<i${d === hl ? ' class="hl"' : ''}>${d}</i>` : '<i></i>';
+        c.innerHTML = h + '</span>';
+      } else c.textContent = '';
+    }
+    c.setAttribute('aria-label', `Zeile ${rowOf(i) + 1}, Spalte ${colOf(i) + 1}: ${v || 'leer'}`);
+  }
+  // Zahlenfeld: wie viele von jeder Zahl noch fehlen (richtig gesetzte zählen)
+  const placed = new Array(10).fill(0);
+  for (let i = 0; i < 81; i++) { const v = value(i); if (v && v === G.sol[i]) placed[v]++; }
+  els.pad.querySelectorAll('.key').forEach(k => {
+    const d = +k.dataset.d, left = 9 - placed[d];
+    k.querySelector('small').textContent = left;
+    k.classList.toggle('done', left === 0);
+  });
+  $('btnNotes').setAttribute('aria-pressed', String(G.notesMode));
+  $('hintCount').textContent = r.hints;
+  $('btnHint').disabled = r.hints <= 0;
+  $('btnUndo').disabled = !G.undo.length;
+  renderHearts(); renderTimer();
+}
+function renderHearts(){
+  const on = heartsOn();
+  els.hearts.hidden = !on;
+  if (!on) return;
+  const h = Math.max(0, G.run.hearts);
+  els.hearts.innerHTML = Array.from({ length: HEARTS }, (_, i) => HEART_SVG(i < h ? 'full' : 'lost')).join('');
+  els.hearts.setAttribute('aria-label', h === 1 ? '1 Herz' : `${h} Herzen`);
+}
+function renderTimer(){ if (G.run) els.timer.textContent = fmt(G.run.ms); }
+function shake(el){ el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
+
+/* ---------- Züge ---------- */
+function pushUndo(){
+  G.undo.push({ val: G.val.slice(), notes: G.notes.slice(), sel: G.sel });
+  if (G.undo.length > 200) G.undo.shift();
+}
+function after(){ syncRun(); render(); }
+
+function select(i){
+  if (G.done) return;
+  G.sel = G.sel === i ? -1 : i;
+  G.hl = G.sel >= 0 ? value(G.sel) : 0;
+  render();
+}
+
+function input(d){
+  if (G.done || !G.run) return;
+  const i = G.sel;
+  if (i < 0 || isLocked(i)) {
+    // Kein freies Feld gewählt: Zahl nur hervorheben
+    G.hl = G.hl === d && (i < 0 || !value(i)) ? 0 : d;
+    if (i >= 0 && value(i) !== d) G.sel = -1;
+    sndTap(); render(); return;
+  }
+  if (G.notesMode) {
+    if (G.val[i]) { pushUndo(); G.val[i] = 0; }
+    else pushUndo();
+    G.notes[i] ^= 1 << (d - 1);
+    G.hl = d; sndTap(); buzz('tap'); after(); return;
+  }
+  if (G.val[i] === d) { pushUndo(); G.val[i] = 0; G.hl = 0; after(); return; }
+  pushUndo();
+  G.val[i] = d; G.notes[i] = 0; G.hl = d;
+  if (d === G.sol[i]) {
+    const bit = ~(1 << (d - 1));
+    for (const p of PEERS[i]) G.notes[p] &= bit;
+    const doneUnits = UNITS.filter(u => u.includes(i) && u.every(j => value(j) === G.sol[j]));
+    if (isSolved()) { after(); win(); return; }
+    if (doneUnits.length) { flashUnits(doneUnits, i); sndUnit(); } else sndPlace(d);
+    buzz('tap');
+  } else {
+    G.run.errors++;
+    sndErr(); buzz('error');
+    if (heartsOn()) {
+      G.run.hearts--;
+      shake(els.hearts);
+      if (G.run.hearts <= 0) { after(); gameOver(); return; }
+    }
+  }
+  after();
+}
+
+function erase(){
+  if (G.done || !G.run) return;
+  const i = G.sel;
+  if (i < 0 || isLocked(i) || (!G.val[i] && !G.notes[i])) { sndTap(); return; }
+  pushUndo(); G.val[i] = 0; G.notes[i] = 0; G.hl = 0; sndTap(); after();
+}
+
+function undo(){
+  if (G.done || !G.undo.length) return;
+  const s = G.undo.pop();
+  G.val = s.val; G.notes = s.notes; G.sel = s.sel;
+  for (const i of G.fixed) { G.val[i] = G.sol[i]; G.notes[i] = 0; }
+  G.hl = G.sel >= 0 ? value(G.sel) : 0;
+  sndTap(); after();
+}
+
+/** Tipp: setzt das gewählte Feld richtig, sonst das Feld, das gerade am leichtesten zu finden ist. */
+function hint(){
+  if (G.done || !G.run) return;
+  if (G.run.hints <= 0) { shake($('hintCount')); return; }
+  let i = G.sel;
+  if (i < 0 || isLocked(i)) i = easiestCell();
+  if (i < 0) return;
+  pushUndo();
+  G.val[i] = G.sol[i]; G.notes[i] = 0; G.fixed.add(i);
+  const bit = ~(1 << (G.sol[i] - 1));
+  for (const p of PEERS[i]) G.notes[p] &= bit;
+  G.run.hints--;
+  G.sel = i; G.hl = G.sol[i];
+  if (isSolved()) { after(); win(); return; }
+  const doneUnits = UNITS.filter(u => u.includes(i) && u.every(j => value(j) === G.sol[j]));
+  if (doneUnits.length) flashUnits(doneUnits, i);
+  cellEls[i].animate && !reduceMotion && cellEls[i].animate([{ transform: 'scale(1.35)' }, { transform: 'scale(1)' }], { duration: 380, easing: 'cubic-bezier(.2,1.5,.35,1)' });
+  sndPlace(G.sol[i]); buzz('tap'); after();
+}
+function easiestCell(){
+  // Feld mit den wenigsten Möglichkeiten (nur richtige Zahlen zählen)
+  let best = -1, bestN = 10;
+  for (let i = 0; i < 81; i++) {
+    if (isLocked(i)) continue;
+    let m = ALL;
+    for (const p of PEERS[i]) { const v = value(p); if (v && v === G.sol[p]) m &= ~(1 << (v - 1)); }
+    const n = POP[m];
+    if (n < bestN) { best = i; bestN = n; }
+  }
+  return best;
+}
+function isSolved(){ for (let i = 0; i < 81; i++) if (value(i) !== G.sol[i]) return false; return true; }
+
+function restartRun(){
+  const r = G.run;
+  Object.assign(r, { c: '0'.repeat(81), m: new Array(81).fill(0), f: [], hearts: HEARTS, hints: HINTS, ms: 0, errors: 0, noRecord: false, sel: -1 });
+  saveProgress();
+  loadRun(G.d);
+  els.dlg.hidden = true;
+  G.last = performance.now();
+  render();
+}
+
+/* ---------- Effekte ---------- */
+function flashUnits(units, from){
+  if (reduceMotion) return;
+  const seen = new Set();
+  for (const u of units) for (const j of u) {
+    if (seen.has(j)) continue; seen.add(j);
+    const dist = Math.abs(rowOf(j) - rowOf(from)) + Math.abs(colOf(j) - colOf(from));
+    cellEls[j].animate && cellEls[j].animate(
+      [{ filter: 'brightness(1)', transform: 'scale(1)' }, { filter: 'brightness(1.12)', transform: 'scale(.86)' }, { filter: 'brightness(1)', transform: 'scale(1)' }],
+      { duration: 420, delay: dist * 35, easing: 'ease-out' });
+  }
+}
+function winWave(){
+  if (reduceMotion) return;
+  const same = getComputedStyle(document.documentElement).getPropertyValue('--same').trim();
+  for (let i = 0; i < 81; i++) {
+    const dist = rowOf(i) + colOf(i);
+    cellEls[i].animate && cellEls[i].animate(
+      [{ transform: 'scale(1)' }, { transform: 'scale(.8)', background: same }, { transform: 'scale(1)' }],
+      { duration: 500, delay: dist * 40, easing: 'ease-out' });
+  }
+}
+
+// Konfetti mit Herzen
+let fxRaf = 0;
+function confetti(){
+  if (reduceMotion) return;
+  const cv = els.fx, dpr = window.devicePixelRatio || 1;
+  cv.hidden = false;
+  const W = cv.clientWidth, H = cv.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const cs = getComputedStyle(document.documentElement);
+  const cols = ['--heart', '--l1', '--l2', '--l3', '--accent', '--user'].map(v => cs.getPropertyValue(v).trim());
+  const parts = [];
+  for (let k = 0; k < 110; k++) {
+    const left = k % 2 === 0;
+    parts.push({ x: left ? -10 : W + 10, y: H * (0.55 + Math.random() * 0.25), vx: (left ? 1 : -1) * (3 + Math.random() * 6), vy: -(8 + Math.random() * 9),
+      s: 6 + Math.random() * 8, r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.3, c: cols[k % cols.length], heart: k % 3 === 0 });
+  }
+  const t0 = performance.now();
+  cancelAnimationFrame(fxRaf);
+  (function frame(now){
+    const t = now - t0;
+    ctx.clearRect(0, 0, W, H);
+    for (const p of parts) {
+      p.vy += 0.32; p.vx *= 0.99; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c;
+      ctx.globalAlpha = Math.max(0, 1 - Math.max(0, t - 1600) / 600);
+      if (p.heart) {
+        const s = p.s / 10;
+        ctx.beginPath(); ctx.moveTo(0, 3 * s);
+        ctx.bezierCurveTo(-8 * s, -3 * s, -4 * s, -9 * s, 0, -4 * s);
+        ctx.bezierCurveTo(4 * s, -9 * s, 8 * s, -3 * s, 0, 3 * s); ctx.fill();
+      } else ctx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2);
+      ctx.restore();
+    }
+    if (t < 2200) fxRaf = requestAnimationFrame(frame); else { ctx.clearRect(0, 0, W, H); cv.hidden = true; }
+  })(t0);
+}
+
+/* ---------- Ende eines Sudokus ---------- */
+function showDlg({ eyebrow, title, text, chips, primary, secondary, party }){
+  $('dlgEyebrow').textContent = eyebrow || '';
+  $('dlgTitle').textContent = title;
+  $('dlgText').textContent = text || '';
+  $('dlgText').hidden = !text;
+  $('dlgChips').innerHTML = (chips || []).map(c => `<span${c.best ? ' class="best"' : ''}>${c.text}</span>`).join('');
+  $('dlgChips').hidden = !(chips && chips.length);
+  $('dlgSheet').classList.toggle('party', !!party);
+  const p = $('dlgPrimary'), s = $('dlgSecondary');
+  p.textContent = primary[0]; p.onclick = primary[1];
+  s.textContent = secondary[0]; s.onclick = secondary[1];
+  els.dlg.hidden = false;
+  setTimeout(() => p.focus({ preventScroll: true }), 50);
+}
+const eyebrowText = () => `${DIFF_NAME[G.d]} – Nr. ${G.run.n}`;
+
+function win(){
+  G.done = true;
+  const r = G.run, st = progress.stats[G.d];
+  st.solved++;
+  const newBest = !r.noRecord && (!st.best || r.ms < st.best);
+  if (newBest) st.best = r.ms;
+  st.n = Math.max(st.n, r.n + 1);
+  progress.run[G.d] = null;
+  saveProgress();
+  G.sel = -1; G.hl = 0; render();
+  winWave(); sndWin(); buzz('win');
+  setTimeout(confetti, 350);
+  const used = HINTS - r.hints;
+  const chips = [{ text: `Zeit ${fmt(r.ms)}`, best: newBest && st.solved > 1 },
+    { text: r.errors === 0 ? 'fehlerfrei' : r.errors === 1 ? '1 Fehler' : `${r.errors} Fehler` }];
+  if (used) chips.push({ text: used === 1 ? '1 Tipp' : `${used} Tipps` });
+  if (!newBest && st.best) chips.push({ text: `Bestzeit ${fmt(st.best)}` });
+  setTimeout(() => showDlg({
+    eyebrow: eyebrowText(),
+    title: newBest && st.solved > 1 ? 'Neue Bestzeit!' : 'Geschafft!',
+    text: PLAYER ? `Gut gemacht, ${PLAYER} ❤️` : 'Gut gemacht ❤️',
+    chips,
+    primary: ['Nächstes', () => { els.dlg.hidden = true; goGame(G.d); }],
+    secondary: ['Menü', goHome],
+    party: true,
+  }), reduceMotion ? 300 : 1100);
+}
+
+function gameOver(quiet){
+  G.done = true;
+  if (!quiet) sndOver();
+  render();
+  showDlg({
+    eyebrow: eyebrowText(),
+    title: 'Keine Herzen mehr',
+    text: 'Drei Fehler. Fang nochmal von vorn an, oder spiel ohne Herzen weiter (dann zählt die Zeit nicht als Bestzeit).',
+    primary: ['Nochmal', restartRun],
+    secondary: ['Weiter', () => { G.run.noRecord = true; G.done = false; els.dlg.hidden = true; G.last = performance.now(); after(); }],
+  });
+}
+
+function askRestart(){
+  if (G.done || !G.run) return;
+  showDlg({
+    eyebrow: eyebrowText(),
+    title: 'Von vorn anfangen?',
+    text: 'Alle Zahlen und Notizen in diesem Sudoku werden gelöscht. Zeit, Herzen und Tipps starten neu.',
+    primary: ['Weiterspielen', () => { els.dlg.hidden = true; G.last = performance.now(); }],
+    secondary: ['Von vorn', restartRun],
+  });
+}
+
+/* ---------- Uhr ---------- */
+const clockRuns = () => G.screen === 'game' && G.run && !G.done && !document.hidden && els.dlg.hidden;
+function tick(){
+  const now = performance.now();
+  if (clockRuns()) {
+    G.run.ms += Math.min(now - G.last, 2000);
+    renderTimer();
+    if (now - G.lastSave > 5000) syncRun();
+  }
+  G.last = now;
+}
+setInterval(tick, 250);
+function pause(){ tick(); if (G.run && G.screen === 'game') syncRun(); }
+document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); else G.last = performance.now(); });
+window.sdPause = pause;
+
+/* ---------- Menü ---------- */
+function renderHome(){
+  els.modes.innerHTML = DIFF_KEYS.map(d => {
+    const st = progress.stats[d], r = progress.run[d];
+    const stats = [];
+    if (r) stats.push(`<span>angefangen · <b>${fmt(r.ms)}</b></span>`);
+    else {
+      if (st.solved) stats.push(`<span>gelöst <b>${st.solved}</b></span>`);
+      if (st.best) stats.push(`<span>Bestzeit <b>${fmt(st.best)}</b></span>`);
+    }
+    return `<button class="mode ${d}" data-d="${d}">` +
+      `<span class="mode-head"><span class="mode-name">${DIFF_NAME[d]}</span><span class="mode-tag">Nr. ${r ? r.n : st.n}</span>` +
+      `<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>` +
+      `<span class="mode-pitch">${r ? 'Weiterspielen' : DIFF_PITCH[d]}</span>` +
+      (stats.length ? `<span class="mode-stats">${stats.join('')}</span>` : '') + '</button>';
+  }).join('');
+  $('hello').textContent = PLAYER ? `Davebook · Hallo ${PLAYER}` : 'Davebook';
+  renderPreview();
+}
+// Vorschau im Menü: das zuletzt gespielte Sudoku (oder ein festes Beispiel)
+const SAMPLE = '530070000600195000098000060800060003400803001700020006060000280000419005000080079';
+function renderPreview(){
+  const wrap = $('previewWrap').getBoundingClientRect();
+  const size = Math.floor(Math.min(wrap.width, wrap.height, 230));
+  els.preview.hidden = size < 70;
+  if (size < 70) return;
+  const r = progress.run[progress.last];
+  const p = r ? r.p : SAMPLE, c = r ? r.c : '0'.repeat(81);
+  els.preview.style.width = els.preview.style.height = size + 'px';
+  els.preview.style.fontSize = Math.round(size / 9 * 0.55) + 'px';
+  let h = '';
+  for (let i = 0; i < 81; i++) {
+    const g = +p[i], u = +c[i];
+    h += g ? `<i>${g}</i>` : u ? `<i class="u">${u}</i>` : '<i></i>';
+  }
+  els.preview.innerHTML = h;
+}
+
+/* ---------- Eingaben ---------- */
+els.board.addEventListener('click', e => {
+  const c = e.target.closest('.cell');
+  if (c) select(+c.dataset.i);
+});
+els.pad.addEventListener('click', e => {
+  const k = e.target.closest('.key');
+  if (k) input(+k.dataset.d);
+});
+$('btnUndo').addEventListener('click', undo);
+$('btnErase').addEventListener('click', erase);
+$('btnNotes').addEventListener('click', () => { G.notesMode = !G.notesMode; sndTap(); buzz('tap'); render(); });
+$('btnHint').addEventListener('click', hint);
+$('btnRestart').addEventListener('click', askRestart);
+$('btnHome').addEventListener('click', goHome);
+els.modes.addEventListener('click', e => { const b = e.target.closest('.mode'); if (b) goGame(b.dataset.d); });
+els.dlg.addEventListener('click', e => { if (e.target === els.dlg && !G.done) { els.dlg.hidden = true; G.last = performance.now(); } });
+
+// Tastatur (Browser): Ziffern, Pfeile, Entf, N = Notizen, Z = Zurück
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { window.sdBack(); return; }
+  if (G.screen !== 'game' || !els.dlg.hidden) return;
+  if (/^[1-9]$/.test(e.key)) input(+e.key);
+  else if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') erase();
+  else if (e.key === 'n' || e.key === 'N') $('btnNotes').click();
+  else if (e.key === 'z' || e.key === 'Z') undo();
+  else if (e.key.startsWith('Arrow')) {
+    const i = G.sel < 0 ? 40 : G.sel, r = rowOf(i), c = colOf(i);
+    const [dr, dc] = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[e.key];
+    G.sel = ((r + dr + 9) % 9) * 9 + (c + dc + 9) % 9; G.hl = value(G.sel); render();
+    e.preventDefault();
+  }
+});
+
+/* ---------- Einstellungen ---------- */
+function renderSettings(){
+  $('tglHearts').setAttribute('aria-checked', String(progress.hearts));
+  $('tglSound').setAttribute('aria-checked', String(progress.sound));
+  $('tglVib').setAttribute('aria-checked', String(progress.vib));
+}
+function openSettings(){ renderSettings(); els.setDlg.hidden = false; setTimeout(() => $('setClose').focus({ preventScroll: true }), 50); }
+function closeSettings(){ els.setDlg.hidden = true; $('btnSettings').focus({ preventScroll: true }); }
+$('btnSettings').addEventListener('click', openSettings);
+$('setClose').addEventListener('click', closeSettings);
+els.setDlg.addEventListener('click', e => { if (e.target === els.setDlg) closeSettings(); });
+$('tglHearts').addEventListener('click', () => { progress.hearts = !progress.hearts; saveProgress(); renderSettings(); buzz('tap'); });
+$('tglSound').addEventListener('click', () => { progress.sound = !progress.sound; saveProgress(); renderSettings(); if (progress.sound) tone(660, 0.12, 'triangle', 0.08); });
+$('tglVib').addEventListener('click', () => { progress.vib = !progress.vib; saveProgress(); renderSettings(); buzz('tap'); });
+
+// Zurück-Taste unter Android: true = erledigt, false = Davebook macht weiter (zurück zum Herz)
+window.sdBack = function(){
+  if (!els.setDlg.hidden) { closeSettings(); return true; }
+  if (!els.dlg.hidden && !G.done) { els.dlg.hidden = true; G.last = performance.now(); return true; }
+  if (G.screen === 'game') { goHome(); return true; }
+  return false;
+};
+
+// Nur für automatische Tests im Browser (?test)
+if (/[?&]test\b/.test(location.search)) window.__sd = { G, progress, input, select, hint, isSolved, generatePuzzle };
+
+/* ---------- Start ---------- */
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (G.screen === 'game') layout(); else renderPreview(); });
+renderHome();
+requestAnimationFrame(renderPreview);
+})();
+</script>
