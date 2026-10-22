@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.HapticFeedbackConstants
 import android.view.View
+import android.view.ViewGroup
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -72,6 +73,9 @@ fun SudokuScreen(me: Person, onExit: () -> Unit) {
         modifier = Modifier.fillMaxSize(),
         factory = { ctx ->
             WebView(ctx).apply {
+                // Wichtig: ohne MATCH_PARENT gilt die WebView in Compose als „wrap_content“. Dann setzt Android
+                // die Seitenhöhe auf 0, „height:100%“ greift nicht und das Spielfeld rutscht über die Knöpfe.
+                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                 setBackgroundColor(background)
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
