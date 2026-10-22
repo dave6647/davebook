@@ -1,0 +1,62 @@
+name: APK bauen
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: APK bauen
+        run: |
+          set -o pipefail
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
+
+      - name: APK umbenennen
+        run: cp app/build/outputs/apk/release/app-release.apk Davebook.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Davebook
+          path: Davebook.apk
+
+      - name: Release veröffentlichen
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Davebook 1.0.${{ github.run_number }}
+          body: "Unten auf **Davebook.apk** tippen, herunterladen und installieren ❤️"
+          files: Davebook.apk
+          make_latest: true
+
+      # Bei Fehlern das Build-Log in den Branch "ci-log" legen, damit man es ohne Login lesen kann.
+      - name: Build-Log sichern
+        if: failure()
+        run: |
+          mkdir -p /tmp/cilog
+          if [ -f build.log ]; then cp build.log /tmp/cilog/build.log; else echo "kein Log" > /tmp/cilog/build.log; fi
+          cd /tmp/cilog
+          git init -q
+          git checkout -q -b ci-log
+          git add build.log
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "Build-Log ${{ github.run_number }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-log

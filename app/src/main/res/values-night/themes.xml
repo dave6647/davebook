@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Davebook" parent="android:Theme.Material.NoActionBar">
+        <item name="android:colorPrimary">#FFB1C8</item>
+        <item name="android:colorPrimaryDark">#8E2A4F</item>
+        <item name="android:colorAccent">#FFB1C8</item>
+        <item name="android:windowBackground">@color/window_bg_dark</item>
+    </style>
+</resources>
