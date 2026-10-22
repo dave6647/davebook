@@ -226,16 +226,10 @@ private fun LoveStep(onNext: (String) -> Unit) {
             }
         }
 
-        val reaction = when (selected) {
-            "Unfassbar" -> "Wusste ich's doch 🥰"
-            "Unendlich" -> "Für immer und ewig ♾️"
-            "Unbeschreiblich" -> "Dann zeig's ihm einfach jeden Tag 💕"
-            else -> ""
-        }
         Spacer(Modifier.height(20.dp))
-        AnimatedVisibility(visible = reaction.isNotEmpty(), enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(visible = selected != null, enter = fadeIn(), exit = fadeOut()) {
             Text(
-                reaction,
+                "Gute Wahl 😍",
                 style = MaterialTheme.typography.titleMedium,
                 color = HeartDeep,
                 textAlign = TextAlign.Center,

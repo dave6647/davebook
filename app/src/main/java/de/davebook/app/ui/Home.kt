@@ -264,8 +264,8 @@ private fun StatsRow(state: AppState, partner: Person) {
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        StatPill("Du → ${partner.display}", "$sent ❤️", Modifier.weight(1f))
-        StatPill("${partner.display} → dich", "$received ❤️", Modifier.weight(1f))
+        StatPill("Verschickte Liebe", "$sent ❤️", Modifier.weight(1f))
+        StatPill("Erhaltene Liebe", "$received ❤️", Modifier.weight(1f))
     }
     Spacer(Modifier.height(4.dp))
     Text(
