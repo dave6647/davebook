@@ -23,7 +23,7 @@ Tipp: In der App auf „Erlauben“ bei der Akku-Karte tippen, damit Herzen auch
 - Kein Konto, kein Server: Die Handys tauschen sich über [ntfy.sh](https://ntfy.sh) aus, einen kostenlosen Push-Dienst.
 - Alles ist mit AES-256 verschlüsselt. Der Schlüssel wird beim Koppeln per Code übertragen und existiert nur auf euren beiden Handys.
 - Die Daten liegen auf beiden Handys. Wer länger offline war, bekommt beim nächsten Verbinden automatisch den Stand vom anderen.
-- Ein kleiner Hintergrunddienst hält die Verbindung offen (die stille Benachrichtigung „Davebook ist verbunden“ kann man in den Android-Einstellungen ausblenden).
+- Ein kleiner Hintergrunddienst hält die Verbindung offen. Android verlangt dafür eine Benachrichtigung; die App führt mit „Ausblenden“ direkt zum Schalter „Hintergrund-Verbindung“, danach ist sie weg. Ob ihr verbunden seid, zeigt die App oben auf der Startseite.
 
 ## Bauen
 

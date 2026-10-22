@@ -199,6 +199,9 @@ private fun SettingsDialog(
                 OutlinedButton(onClick = { openNotificationSettings(context) }, modifier = Modifier.fillMaxWidth()) {
                     Text("Benachrichtigungen")
                 }
+                OutlinedButton(onClick = { openServiceHintSettings(context) }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Verbindungs-Hinweis in der Leiste")
+                }
                 Spacer(Modifier.height(12.dp))
                 Text(
                     "Davebook ${BuildConfig.VERSION_NAME} · Nachrichten sind Ende-zu-Ende verschlüsselt",

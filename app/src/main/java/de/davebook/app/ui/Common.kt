@@ -69,6 +69,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.davebook.app.AppState
+import de.davebook.app.Notifier
 import de.davebook.app.Person
 import de.davebook.app.Store
 import de.davebook.app.Sync
@@ -393,6 +394,15 @@ fun openNotificationSettings(context: Context) {
         )
     } catch (e: Exception) {
         // nichts zu machen
+    }
+}
+
+/** Öffnet den Schalter für den Leisten-Hinweis "Hintergrund-Verbindung". */
+fun openServiceHintSettings(context: Context) {
+    try {
+        context.startActivity(Notifier.serviceSettingsIntent(context))
+    } catch (e: Exception) {
+        openNotificationSettings(context)
     }
 }
 

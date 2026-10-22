@@ -6,7 +6,9 @@ import android.os.PowerManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,8 +17,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -41,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -48,6 +53,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import de.davebook.app.AppState
 import de.davebook.app.Note
+import de.davebook.app.Notifier
 import de.davebook.app.Person
 import de.davebook.app.Quotes
 import de.davebook.app.Store
@@ -83,13 +89,18 @@ fun HomeScreen(state: AppState, onOpenPairing: () -> Unit) {
             .padding(horizontal = 20.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
-            "Hallo ${me.display} ❤️",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Hallo ${me.display} ❤️",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            if (state.secret != null) ConnectionBadge(state.connected)
+        }
         Spacer(Modifier.height(12.dp))
+
+        ServiceHintCard(state)
 
         if (state.secret == null) {
             ConnectCard(partner, onOpenPairing)
@@ -360,6 +371,65 @@ private fun NoteDialog(partner: Person, initial: String, onDismiss: () -> Unit, 
             TextButton(onClick = onDismiss) { Text("Abbrechen") }
         },
     )
+}
+
+/** Verbindungsstatus – steht nur hier in der App, nicht mehr in der Benachrichtigungsleiste. */
+@Composable
+private fun ConnectionBadge(connected: Boolean) {
+    val dot = if (connected) Color(0xFF2E9E5B) else Color(0xFFE0A030)
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Row(
+            Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier
+                    .size(8.dp)
+                    .background(dot, CircleShape),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                if (connected) "Verbunden" else "Verbinde …",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/**
+ * Android zwingt den Hintergrunddienst, eine Benachrichtigung zu zeigen. Diese Karte führt
+ * direkt zum Schalter "Hintergrund-Verbindung" und verschwindet, sobald er aus ist.
+ */
+@Composable
+private fun ServiceHintCard(state: AppState) {
+    if (state.secret == null) return
+    val context = LocalContext.current
+    val tick by Store.resumeTick.collectAsState()
+    val hidden = remember(tick) { Notifier.serviceHintHidden(context) }
+    if (hidden) return
+    Card(shape = CardShape, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(18.dp)) {
+            Text(
+                "🔕 Hinweis in der Leiste ausblenden",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Android verlangt für die Dauerverbindung eine Benachrichtigung. Tippe auf „Ausblenden“ " +
+                    "und schalte den Schalter aus – Herzen kommen trotzdem sofort an. " +
+                    "Ob ihr verbunden seid, siehst du oben hier in der App.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = { openServiceHintSettings(context) }) { Text("Ausblenden") }
+        }
+    }
+    SectionGap()
 }
 
 @Composable

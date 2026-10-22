@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import java.time.LocalDate
@@ -33,8 +34,10 @@ object Notifier {
             enableVibration(true)
         }
         val service = NotificationChannel(CH_SERVICE, "Hintergrund-Verbindung", NotificationManager.IMPORTANCE_MIN).apply {
-            description = "Hält die Verbindung offen, damit Herzen sofort ankommen. Kann ausgeblendet werden."
+            description = "Android verlangt diese Benachrichtigung für die Dauerverbindung. " +
+                "Ausschalten geht problemlos – Herzen kommen trotzdem sofort an."
             setShowBadge(false)
+            lockscreenVisibility = Notification.VISIBILITY_SECRET
         }
         val reminder = NotificationChannel(CH_REMINDER, "Erinnerungen", NotificationManager.IMPORTANCE_HIGH).apply {
             description = "Liebe Erinnerungen, z. B. ans Trinken"
@@ -134,17 +137,43 @@ object Notifier {
         }
     }
 
+    /**
+     * Android verlangt für den Hintergrunddienst eine Benachrichtigung, die App kann sie nicht
+     * selbst verstecken. Schaltet man den Kanal "Hintergrund-Verbindung" aus, verschwindet sie,
+     * der Dienst läuft aber weiter. Der Verbindungsstatus steht stattdessen in der App.
+     */
     fun serviceNotification(ctx: Context): Notification {
-        val partner = Store.state.value.me?.partner?.display ?: "deinem Schatz"
+        val hide = PendingIntent.getActivity(
+            ctx, 1, serviceSettingsIntent(ctx).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
         return NotificationCompat.Builder(ctx, CH_SERVICE)
             .setSmallIcon(R.drawable.ic_notification)
             .setColor(ROSE)
-            .setContentTitle("Davebook ist verbunden")
-            .setContentText("Herzen von $partner kommen sofort an ❤️")
+            .setContentTitle("Davebook")
+            .setContentText("Tippe hier, um diesen Hinweis auszublenden")
             .setOngoing(true)
+            .setSilent(true)
             .setShowWhen(false)
             .setPriority(NotificationCompat.PRIORITY_MIN)
-            .setContentIntent(openApp(ctx))
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setContentIntent(hide)
             .build()
+    }
+
+    /** Öffnet direkt den Schalter für den Kanal "Hintergrund-Verbindung". */
+    fun serviceSettingsIntent(ctx: Context): Intent =
+        Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)
+            .putExtra(Settings.EXTRA_CHANNEL_ID, CH_SERVICE)
+
+    /** true, wenn der Hinweis des Hintergrunddienstes nicht (mehr) in der Leiste erscheint. */
+    fun serviceHintHidden(ctx: Context): Boolean {
+        val nm = ctx.getSystemService(NotificationManager::class.java) ?: return true
+        // Ganz ohne Benachrichtigungen ist ohnehin nichts in der Leiste
+        if (!nm.areNotificationsEnabled()) return true
+        val ch = nm.getNotificationChannel(CH_SERVICE) ?: return false
+        return ch.importance == NotificationManager.IMPORTANCE_NONE
     }
 }
