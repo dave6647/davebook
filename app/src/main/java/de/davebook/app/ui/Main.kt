@@ -115,14 +115,13 @@ private fun MainScaffold(state: AppState) {
                     icon = { Icon(painterResource(R.drawable.ic_sudoku), contentDescription = null) },
                     label = { Text("Sudoku") },
                 )
-                if (me == Person.DAVID) {
-                    NavigationBarItem(
-                        selected = tab == TAB_REMINDERS,
-                        onClick = { tab = TAB_REMINDERS },
-                        icon = { Icon(Icons.Filled.Notifications, contentDescription = null) },
-                        label = { Text("Erinnerungen") },
-                    )
-                }
+                // Beide können dem anderen Erinnerungen schicken
+                NavigationBarItem(
+                    selected = tab == TAB_REMINDERS,
+                    onClick = { tab = TAB_REMINDERS },
+                    icon = { Icon(Icons.Filled.Notifications, contentDescription = null) },
+                    label = { Text("Erinnerungen") },
+                )
             }
         },
     ) { padding ->
@@ -133,7 +132,7 @@ private fun MainScaffold(state: AppState) {
         ) {
             when {
                 tab == TAB_CALENDAR -> CalendarScreen(state)
-                tab == TAB_REMINDERS && me == Person.DAVID -> RemindersScreen(state)
+                tab == TAB_REMINDERS -> RemindersScreen(state)
                 tab == TAB_SUDOKU -> SudokuScreen(me, onExit = { tab = TAB_HEART })
                 else -> HomeScreen(state, onOpenPairing = {
                     pairMode = if (me == Person.SOPHIE) PAIR_SHOW else PAIR_JOIN

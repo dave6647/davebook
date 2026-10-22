@@ -57,17 +57,17 @@ import de.davebook.app.Reminders
 import de.davebook.app.Store
 import java.util.UUID
 
-private val SUGGESTIONS = listOf(
+private fun suggestions(partner: Person) = listOf(
     "Genug getrunken? 💧",
     "Denk an deine Tablette 💊",
     "Kurz Pause machen 🌿",
     "Zeit für einen Snack 🍎",
-    "Kurz durchatmen 🧘‍♀️",
+    if (partner == Person.SOPHIE) "Kurz durchatmen 🧘‍♀️" else "Kurz durchatmen 🧘‍♂️",
     "Ich hab dich lieb ❤️",
     "Du bist toll, vergiss das nicht ✨",
 )
 
-/** Davids Bereich: Erinnerungen, die automatisch auf Sophies Handy erscheinen. */
+/** Erinnerungen für den anderen (David für Sophie und Sophie für David). Sie erscheinen automatisch auf dessen Handy. */
 @Composable
 fun RemindersScreen(state: AppState) {
     val me = state.me ?: return
@@ -217,7 +217,7 @@ private fun ReminderDialog(initial: Reminder?, me: Person, onDismiss: () -> Unit
                 )
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.horizontalScroll(rememberScrollState())) {
-                    SUGGESTIONS.forEach { s ->
+                    suggestions(partner).forEach { s ->
                         AssistChip(
                             onClick = { text = s },
                             label = { Text(s) },

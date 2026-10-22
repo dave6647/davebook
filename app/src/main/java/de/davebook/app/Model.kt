@@ -65,7 +65,7 @@ data class CalEvent(
     }
 }
 
-/** Wiederkehrende Erinnerung, die David für Sophie anlegt (z. B. "Genug getrunken? 💧"). */
+/** Wiederkehrende Erinnerung, die einer für den anderen anlegt (z. B. "Genug getrunken? 💧"). Geplant wird sie auf dem Handy von [target]. */
 data class Reminder(
     val id: String,
     val text: String,
