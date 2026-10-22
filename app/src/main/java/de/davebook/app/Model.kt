@@ -65,6 +65,66 @@ data class CalEvent(
     }
 }
 
+/** Wiederkehrende Erinnerung, die David für Sophie anlegt (z. B. "Genug getrunken? 💧"). */
+data class Reminder(
+    val id: String,
+    val text: String,
+    val intervalMinutes: Int,
+    val enabled: Boolean,
+    /** Zwischen 22 und 8 Uhr keine Erinnerung */
+    val quiet: Boolean,
+    /** Person, bei der die Erinnerung erscheint */
+    val target: String,
+    /** Ab wann gezählt wird (beim Einschalten oder Ändern des Intervalls neu gesetzt) */
+    val since: Long,
+    val by: String,
+    val updated: Long,
+    val deleted: Boolean,
+) {
+    fun toJson(): JSONObject = JSONObject()
+        .put("id", id)
+        .put("text", text)
+        .put("int", intervalMinutes)
+        .put("on", enabled)
+        .put("quiet", quiet)
+        .put("target", target)
+        .put("since", since)
+        .put("by", by)
+        .put("upd", updated)
+        .put("del", deleted)
+
+    companion object {
+        const val DRINK_ID = "drink"
+
+        fun fromJson(o: JSONObject): Reminder = Reminder(
+            id = o.getString("id"),
+            text = o.optString("text"),
+            intervalMinutes = o.optInt("int", 480),
+            enabled = o.optBoolean("on", true),
+            quiet = o.optBoolean("quiet", true),
+            target = o.optString("target", Person.SOPHIE.id),
+            since = o.optLong("since", 0L),
+            by = o.optString("by"),
+            updated = o.optLong("upd", 0L),
+            deleted = o.optBoolean("del", false),
+        )
+
+        /** Standard-Erinnerung für Sophie: alle 8 Stunden ans Trinken denken. */
+        fun defaultDrink(now: Long): Reminder = Reminder(
+            id = DRINK_ID,
+            text = "Genug getrunken? 💧",
+            intervalMinutes = 8 * 60,
+            enabled = true,
+            quiet = true,
+            target = Person.SOPHIE.id,
+            since = now,
+            by = Person.DAVID.id,
+            updated = 0L,
+            deleted = false,
+        )
+    }
+}
+
 data class Note(val text: String, val ts: Long) {
     fun toJson(): JSONObject = JSONObject().put("text", text).put("ts", ts)
 
@@ -98,6 +158,9 @@ data class AppState(
     val lastHello: Long = 0L,
     val lastSnapshotSent: Long = 0L,
     val batteryTipDismissed: Boolean = false,
+    val reminders: Map<String, Reminder> = emptyMap(),
+    /** Nur auf diesem Handy: wann welche Erinnerung zuletzt kam */
+    val reminderLastFired: Map<String, Long> = emptyMap(),
     /** Nur zur Laufzeit, wird nicht gespeichert */
     val connected: Boolean = false,
 ) {
@@ -126,6 +189,12 @@ data class AppState(
         o.put("lastHello", lastHello)
         o.put("lastSnapshotSent", lastSnapshotSent)
         o.put("batteryTipDismissed", batteryTipDismissed)
+        val rems = JSONArray()
+        reminders.values.forEach { rems.put(it.toJson()) }
+        o.put("reminders", rems)
+        val fired = JSONObject()
+        reminderLastFired.forEach { (k, v) -> fired.put(k, v) }
+        o.put("reminderLastFired", fired)
         return o
     }
 
@@ -143,6 +212,24 @@ data class AppState(
                         // kaputten Eintrag überspringen
                     }
                 }
+            }
+            val reminders = mutableMapOf<String, Reminder>()
+            val rems = o.optJSONArray("reminders")
+            if (rems != null) {
+                for (i in 0 until rems.length()) {
+                    val obj = rems.optJSONObject(i) ?: continue
+                    try {
+                        val r = Reminder.fromJson(obj)
+                        reminders[r.id] = r
+                    } catch (ex: Exception) {
+                        // kaputten Eintrag überspringen
+                    }
+                }
+            }
+            val lastFired = mutableMapOf<String, Long>()
+            val firedObj = o.optJSONObject("reminderLastFired")
+            if (firedObj != null) {
+                for (k in firedObj.keys()) lastFired[k] = firedObj.optLong(k, 0L)
             }
             val notes = mutableMapOf<String, Note>()
             val notesObj = o.optJSONObject("notes")
@@ -172,6 +259,8 @@ data class AppState(
                 lastHello = o.optLong("lastHello", 0L),
                 lastSnapshotSent = o.optLong("lastSnapshotSent", 0L),
                 batteryTipDismissed = o.optBoolean("batteryTipDismissed", false),
+                reminders = reminders,
+                reminderLastFired = lastFired,
             )
         }
 

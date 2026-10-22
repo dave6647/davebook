@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -98,6 +99,14 @@ private fun MainScaffold(state: AppState) {
                     icon = { Icon(Icons.Filled.DateRange, contentDescription = null) },
                     label = { Text("Kalender") },
                 )
+                if (me == Person.DAVID) {
+                    NavigationBarItem(
+                        selected = tab == 2,
+                        onClick = { tab = 2 },
+                        icon = { Icon(Icons.Filled.Notifications, contentDescription = null) },
+                        label = { Text("Erinnerungen") },
+                    )
+                }
             }
         },
     ) { padding ->
@@ -106,12 +115,12 @@ private fun MainScaffold(state: AppState) {
                 .padding(padding)
                 .fillMaxSize(),
         ) {
-            if (tab == 0) {
-                HomeScreen(state, onOpenPairing = {
+            when {
+                tab == 1 -> CalendarScreen(state)
+                tab == 2 && me == Person.DAVID -> RemindersScreen(state)
+                else -> HomeScreen(state, onOpenPairing = {
                     pairMode = if (me == Person.SOPHIE) PAIR_SHOW else PAIR_JOIN
                 })
-            } else {
-                CalendarScreen(state)
             }
         }
     }

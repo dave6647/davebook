@@ -155,6 +155,24 @@ object Sync {
             size += len + 1
         }
         if (chunk.length() > 0) Store.enqueue(JSONObject().put("t", "snap").put("evs", chunk))
+
+        // Erinnerungen genauso in kleinen Paketen (die unveränderte Standard-Erinnerung muss nicht mit)
+        var remChunk = JSONArray()
+        var remSize = 0
+        for (r in s.reminders.values) {
+            if (r.updated == 0L) continue
+            if (r.deleted && now - r.updated > 30L * 24 * 3600 * 1000) continue
+            val js = r.toJson()
+            val len = js.toString().toByteArray(Charsets.UTF_8).size
+            if (remSize + len > 1800 && remChunk.length() > 0) {
+                Store.enqueue(JSONObject().put("t", "snap").put("rems", remChunk))
+                remChunk = JSONArray()
+                remSize = 0
+            }
+            remChunk.put(js)
+            remSize += len + 1
+        }
+        if (remChunk.length() > 0) Store.enqueue(JSONObject().put("t", "snap").put("rems", remChunk))
     }
 
     // ------------------------------------------------------------------ Empfangen

@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -52,12 +54,23 @@ object Store {
         file = File(appContext.filesDir, "state.json")
         var s = load()
         if (s.deviceId.isEmpty()) s = s.copy(deviceId = UUID.randomUUID().toString())
+        if (!s.reminders.containsKey(Reminder.DRINK_ID)) {
+            val drink = Reminder.defaultDrink(System.currentTimeMillis())
+            s = s.copy(reminders = s.reminders + (drink.id to drink))
+        }
         _state.value = s.copy(connected = false)
         scope.launch {
             for (signal in saveSignal) writeNow()
         }
         saveSignal.trySend(Unit)
         Sync.start()
+        // Erinnerungen neu planen, sobald sich Rolle, Einrichtung oder Erinnerungen ändern
+        scope.launch {
+            state
+                .map { Triple(it.me, it.setupDone, it.reminders) }
+                .distinctUntilChanged()
+                .collect { Reminders.reschedule(appContext) }
+        }
     }
 
     private fun load(): AppState = try {
@@ -165,6 +178,17 @@ object Store {
 
     fun deleteEvent(e: CalEvent) = saveEvent(e.copy(deleted = true))
 
+    fun saveReminder(r: Reminder) {
+        val rem = r.copy(updated = System.currentTimeMillis())
+        update { it.copy(reminders = it.reminders + (rem.id to rem)) }
+        enqueue(JSONObject().put("t", "rem").put("r", rem.toJson()))
+    }
+
+    fun deleteReminder(r: Reminder) = saveReminder(r.copy(deleted = true, enabled = false))
+
+    fun markReminderFired(id: String, time: Long) =
+        update { it.copy(reminderLastFired = it.reminderLastFired + (id to time)) }
+
     // ---------------------------------------------------------------- Empfangen
 
     fun handleIncoming(p: JSONObject) {
@@ -225,6 +249,19 @@ object Store {
                 if (created && fromPartner && recent) Notifier.event(appContext, from, e)
             }
 
+            "rem" -> {
+                val obj = p.optJSONObject("r") ?: return
+                val r = try {
+                    Reminder.fromJson(obj)
+                } catch (ex: Exception) {
+                    return
+                }
+                update { st ->
+                    val old = st.reminders[r.id]
+                    if (old == null || r.updated > old.updated) st.copy(reminders = st.reminders + (r.id to r)) else st
+                }
+            }
+
             "love" -> {
                 if (from == Person.SOPHIE) {
                     val v = p.optString("v")
@@ -242,9 +279,23 @@ object Store {
 
     private fun mergeSnapshot(from: Person, p: JSONObject) {
         val evs = p.optJSONArray("evs")
+        val rems = p.optJSONArray("rems")
         val notesObj = p.optJSONObject("notes")
         val love = p.optString("love")
         update { st ->
+            var reminders = st.reminders
+            if (rems != null) {
+                for (i in 0 until rems.length()) {
+                    val obj = rems.optJSONObject(i) ?: continue
+                    val r = try {
+                        Reminder.fromJson(obj)
+                    } catch (ex: Exception) {
+                        continue
+                    }
+                    val old = reminders[r.id]
+                    if (old == null || r.updated > old.updated) reminders = reminders + (r.id to r)
+                }
+            }
             var events = st.events
             if (evs != null) {
                 for (i in 0 until evs.length()) {
@@ -268,7 +319,7 @@ object Store {
                 }
             }
             val newLove = if (from == Person.SOPHIE && love.isNotEmpty()) love else st.love
-            st.copy(events = events, notes = notes, love = newLove)
+            st.copy(events = events, notes = notes, love = newLove, reminders = reminders)
         }
     }
 }

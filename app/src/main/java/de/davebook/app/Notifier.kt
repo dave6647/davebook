@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger
 object Notifier {
     const val CH_LOVE = "love"
     const val CH_SERVICE = "service"
+    const val CH_REMINDER = "reminder"
     const val ID_SERVICE = 1
     private const val ID_HEART = 2
     private const val ID_NOTE = 3
@@ -35,8 +36,27 @@ object Notifier {
             description = "Hält die Verbindung offen, damit Herzen sofort ankommen. Kann ausgeblendet werden."
             setShowBadge(false)
         }
+        val reminder = NotificationChannel(CH_REMINDER, "Erinnerungen", NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "Liebe Erinnerungen, z. B. ans Trinken"
+            enableVibration(true)
+        }
         nm.createNotificationChannel(love)
         nm.createNotificationChannel(service)
+        nm.createNotificationChannel(reminder)
+    }
+
+    fun reminder(ctx: Context, r: Reminder, from: Person) {
+        val n = NotificationCompat.Builder(ctx, CH_REMINDER)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setColor(ROSE)
+            .setAutoCancel(true)
+            .setContentIntent(openApp(ctx))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setContentTitle(r.text)
+            .setContentText("Erinnerung von ${from.display} ❤️")
+            .build()
+        post(ctx, 1000 + (r.id.hashCode() and 0xFFF), n)
     }
 
     private fun canNotify(ctx: Context): Boolean =
