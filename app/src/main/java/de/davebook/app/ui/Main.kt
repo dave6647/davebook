@@ -79,6 +79,7 @@ private fun MainScaffold(state: AppState) {
     val me = state.me ?: return
     var tab by rememberSaveable { mutableIntStateOf(TAB_HEART) }
     var showSettings by remember { mutableStateOf(false) }
+    var showImport by remember { mutableStateOf(false) }
     var pairMode by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
@@ -88,6 +89,11 @@ private fun MainScaffold(state: AppState) {
                 CenterAlignedTopAppBar(
                     title = { Text("Davebook", fontWeight = FontWeight.Bold) },
                     actions = {
+                        if (tab == TAB_CALENDAR) {
+                            IconButton(onClick = { showImport = true }) {
+                                Icon(painterResource(R.drawable.ic_folder_import), contentDescription = "Import-Ordner")
+                            }
+                        }
                         IconButton(onClick = { showSettings = true }) {
                             Icon(Icons.Filled.Settings, contentDescription = "Einstellungen")
                         }
@@ -131,7 +137,7 @@ private fun MainScaffold(state: AppState) {
                 .fillMaxSize(),
         ) {
             when {
-                tab == TAB_CALENDAR -> CalendarScreen(state)
+                tab == TAB_CALENDAR -> CalendarScreen(state, onOpenImport = { showImport = true })
                 tab == TAB_REMINDERS -> RemindersScreen(state)
                 tab == TAB_SUDOKU -> SudokuScreen(me, onExit = { tab = TAB_HEART })
                 else -> HomeScreen(state, onOpenPairing = {
@@ -154,6 +160,9 @@ private fun MainScaffold(state: AppState) {
                 pairMode = PAIR_JOIN
             },
         )
+    }
+    if (showImport) {
+        ImportFoldersDialog(state, onDismiss = { showImport = false })
     }
     val mode = pairMode
     if (mode != null) {

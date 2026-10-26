@@ -43,6 +43,7 @@ class MainActivity : ComponentActivity() {
         SyncService.start(this)
         Sync.maybeHello()
         Sync.flush()
+        FolderImport.onResume()
     }
 
     override fun onPause() {

@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.UUID
@@ -64,6 +65,7 @@ object Store {
         }
         saveSignal.trySend(Unit)
         Sync.start()
+        FolderImport.start()
         // Erinnerungen neu planen, sobald sich Rolle, Einrichtung oder Erinnerungen ändern
         scope.launch {
             state
@@ -177,6 +179,100 @@ object Store {
     }
 
     fun deleteEvent(e: CalEvent) = saveEvent(e.copy(deleted = true))
+
+    // ---------------------------------------------------------------- Import-Ordner
+
+    fun addImportFolder(f: ImportFolder) = update { st ->
+        st.copy(importFolders = st.importFolders.filter { it.id != f.id } + f)
+    }
+
+    fun updateImportFolder(id: String, f: (ImportFolder) -> ImportFolder) = update { st ->
+        st.copy(importFolders = st.importFolders.map { if (it.id == id) f(it) else it })
+    }
+
+    private fun CalEvent.sameContent(o: CalEvent): Boolean =
+        title == o.title && date == o.date && endDate == o.endDate && time == o.time &&
+            source == o.source && emoji == o.emoji && note == o.note && yearly == o.yearly
+
+    /**
+     * Gleicht die Termine eines Import-Ordners mit dem ab, was gerade im Ordner liegt.
+     * [found]: Termine im Ordner (ID → Termin). [keep]: IDs von Notizen, die gerade nicht lesbar waren und bleiben.
+     */
+    fun applyImport(folderId: String, found: Map<String, CalEvent>, keep: Set<String>, skipped: Int) {
+        val now = System.currentTimeMillis()
+        val changed = ArrayList<CalEvent>()
+        update { st ->
+            changed.clear()
+            // Ordner wurde inzwischen entfernt
+            if (st.importFolders.none { it.id == folderId }) return@update st
+            var events = st.events
+            for ((id, e) in found) {
+                val old = events[id]
+                if (old != null && !old.deleted && old.sameContent(e)) continue
+                val ev = e.copy(updated = maxOf(now, (old?.updated ?: 0L) + 1))
+                events = events + (id to ev)
+                changed.add(ev)
+            }
+            for (old in st.events.values) {
+                if (old.source != folderId || old.deleted || found.containsKey(old.id) || keep.contains(old.id)) continue
+                val ev = old.copy(deleted = true, updated = maxOf(now, old.updated + 1))
+                events = events + (old.id to ev)
+                changed.add(ev)
+            }
+            val count = events.values.count { it.source == folderId && !it.deleted }
+            st.copy(
+                events = events,
+                importFolders = st.importFolders.map {
+                    if (it.id == folderId) it.copy(lastScan = now, count = count, skipped = skipped, error = "") else it
+                },
+            )
+        }
+        sendEvents(changed)
+    }
+
+    /** Entfernt einen Import-Ordner samt seiner Termine (auch beim anderen). */
+    fun removeImportFolder(folderId: String) {
+        val now = System.currentTimeMillis()
+        val changed = ArrayList<CalEvent>()
+        update { st ->
+            changed.clear()
+            var events = st.events
+            for (old in st.events.values) {
+                if (old.source != folderId || old.deleted) continue
+                val ev = old.copy(deleted = true, updated = maxOf(now, old.updated + 1))
+                events = events + (old.id to ev)
+                changed.add(ev)
+            }
+            st.copy(events = events, importFolders = st.importFolders.filter { it.id != folderId })
+        }
+        sendEvents(changed)
+    }
+
+    /**
+     * Schickt geänderte Termine an das andere Handy. Wenige einzeln (dort mit Benachrichtigung),
+     * viele (z. B. beim ersten Einlesen eines Ordners) gebündelt und ohne Benachrichtigung.
+     */
+    private fun sendEvents(list: List<CalEvent>) {
+        if (list.isEmpty()) return
+        if (list.size <= 3) {
+            list.forEach { enqueue(JSONObject().put("t", "ev").put("e", it.toJson())) }
+            return
+        }
+        var chunk = JSONArray()
+        var size = 0
+        for (e in list) {
+            val js = e.toJson()
+            val len = js.toString().toByteArray(Charsets.UTF_8).size
+            if (size + len > 1800 && chunk.length() > 0) {
+                enqueue(JSONObject().put("t", "snap").put("evs", chunk))
+                chunk = JSONArray()
+                size = 0
+            }
+            chunk.put(js)
+            size += len + 1
+        }
+        if (chunk.length() > 0) enqueue(JSONObject().put("t", "snap").put("evs", chunk))
+    }
 
     fun saveReminder(r: Reminder) {
         val rem = r.copy(updated = System.currentTimeMillis())

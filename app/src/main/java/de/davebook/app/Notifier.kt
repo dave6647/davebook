@@ -119,12 +119,21 @@ object Notifier {
         } catch (ex: Exception) {
             e.date
         }
+        val until = try {
+            if (e.endDate.isNotEmpty()) {
+                " bis " + LocalDate.parse(e.endDate).format(DateTimeFormatter.ofPattern("EEEE, d. MMMM", Locale.GERMAN))
+            } else {
+                ""
+            }
+        } catch (ex: Exception) {
+            ""
+        }
         val time = if (e.time.isNotEmpty()) " um ${e.time} Uhr" else ""
         post(
             ctx, eventIds.incrementAndGet(),
             loveBuilder(ctx)
                 .setContentTitle("${from.display} hat etwas eingetragen 📅")
-                .setContentText("${e.emoji} ${e.title} · $date$time")
+                .setContentText("${e.emoji} ${e.title} · $date$until$time")
                 .build(),
         )
     }

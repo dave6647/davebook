@@ -36,18 +36,29 @@ data class CalEvent(
     val by: String,
     val updated: Long,
     val deleted: Boolean,
+    /** yyyy-MM-dd, letzter Tag (einschließlich) bei mehrtägigen Terminen, sonst leer */
+    val endDate: String = "",
+    /** Import-Ordner, aus dem der Termin stammt (dann nur dort änderbar), sonst leer */
+    val source: String = "",
 ) {
-    fun toJson(): JSONObject = JSONObject()
-        .put("id", id)
-        .put("title", title)
-        .put("date", date)
-        .put("time", time)
-        .put("note", note)
-        .put("emoji", emoji)
-        .put("yearly", yearly)
-        .put("by", by)
-        .put("upd", updated)
-        .put("del", deleted)
+    val imported: Boolean get() = source.isNotEmpty()
+
+    fun toJson(): JSONObject {
+        val o = JSONObject()
+            .put("id", id)
+            .put("title", title)
+            .put("date", date)
+            .put("time", time)
+            .put("note", note)
+            .put("emoji", emoji)
+            .put("yearly", yearly)
+            .put("by", by)
+            .put("upd", updated)
+            .put("del", deleted)
+        if (endDate.isNotEmpty()) o.put("end", endDate)
+        if (source.isNotEmpty()) o.put("src", source)
+        return o
+    }
 
     companion object {
         fun fromJson(o: JSONObject): CalEvent = CalEvent(
@@ -61,6 +72,46 @@ data class CalEvent(
             by = o.optString("by"),
             updated = o.optLong("upd", 0L),
             deleted = o.optBoolean("del", false),
+            endDate = o.optString("end"),
+            source = o.optString("src"),
+        )
+    }
+}
+
+/**
+ * Ein Ordner auf diesem Handy, aus dem Termin-Notizen übernommen werden (z. B. Obsidian mit Full Calendar).
+ * Liegt nur auf dem Handy, das den Ordner verknüpft hat; die Termine selbst gehen an beide.
+ */
+data class ImportFolder(
+    val id: String,
+    /** content://-Adresse aus der Android-Ordnerfreigabe */
+    val uri: String,
+    val name: String,
+    val lastScan: Long = 0L,
+    val count: Int = 0,
+    /** Wiederkehrende Termine, die (noch) nicht übernommen werden */
+    val skipped: Int = 0,
+    /** Letzter Fehler beim Einlesen, leer = alles gut */
+    val error: String = "",
+) {
+    fun toJson(): JSONObject = JSONObject()
+        .put("id", id)
+        .put("uri", uri)
+        .put("name", name)
+        .put("lastScan", lastScan)
+        .put("count", count)
+        .put("skipped", skipped)
+        .put("error", error)
+
+    companion object {
+        fun fromJson(o: JSONObject): ImportFolder = ImportFolder(
+            id = o.getString("id"),
+            uri = o.getString("uri"),
+            name = o.optString("name"),
+            lastScan = o.optLong("lastScan", 0L),
+            count = o.optInt("count", 0),
+            skipped = o.optInt("skipped", 0),
+            error = o.optString("error"),
         )
     }
 }
@@ -161,6 +212,8 @@ data class AppState(
     val reminders: Map<String, Reminder> = emptyMap(),
     /** Nur auf diesem Handy: wann welche Erinnerung zuletzt kam */
     val reminderLastFired: Map<String, Long> = emptyMap(),
+    /** Verknüpfte Import-Ordner (nur auf diesem Handy) */
+    val importFolders: List<ImportFolder> = emptyList(),
     /** Nur zur Laufzeit, wird nicht gespeichert */
     val connected: Boolean = false,
 ) {
@@ -195,6 +248,9 @@ data class AppState(
         val fired = JSONObject()
         reminderLastFired.forEach { (k, v) -> fired.put(k, v) }
         o.put("reminderLastFired", fired)
+        val folders = JSONArray()
+        importFolders.forEach { folders.put(it.toJson()) }
+        o.put("importFolders", folders)
         return o
     }
 
@@ -231,6 +287,18 @@ data class AppState(
             if (firedObj != null) {
                 for (k in firedObj.keys()) lastFired[k] = firedObj.optLong(k, 0L)
             }
+            val importFolders = ArrayList<ImportFolder>()
+            val folders = o.optJSONArray("importFolders")
+            if (folders != null) {
+                for (i in 0 until folders.length()) {
+                    val obj = folders.optJSONObject(i) ?: continue
+                    try {
+                        importFolders.add(ImportFolder.fromJson(obj))
+                    } catch (ex: Exception) {
+                        // kaputten Eintrag überspringen
+                    }
+                }
+            }
             val notes = mutableMapOf<String, Note>()
             val notesObj = o.optJSONObject("notes")
             if (notesObj != null) {
@@ -261,6 +329,7 @@ data class AppState(
                 batteryTipDismissed = o.optBoolean("batteryTipDismissed", false),
                 reminders = reminders,
                 reminderLastFired = lastFired,
+                importFolders = importFolders,
             )
         }
 
